@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [ Debug, Release ]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Checkout newosp
+        uses: actions/checkout@v5
+        with:
+          repository: DeguiLiu/newosp
+          # Baseline pinned by the design document.
+          ref: 3062194807113c8b139a0197786cbab9bd2638a7
+          path: newosp
+
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Configure
+        run: |
+          cmake -S impl -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DNEWOSP_DIR="${{ github.workspace }}/newosp" \
+            -DRS_BUILD_E2E=ON \
+            -DRS_ENABLE_DEBUG_SHELL=ON \
+            -DRS_ENABLE_FAULT_INJECTION=ON
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  minimal-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Checkout newosp
+        uses: actions/checkout@v5
+        with:
+          repository: DeguiLiu/newosp
+          ref: 3062194807113c8b139a0197786cbab9bd2638a7
+          path: newosp
+
+      - name: Configure
+        run: |
+          cmake -S impl -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DNEWOSP_DIR="${{ github.workspace }}/newosp" \
+            -DRS_BUILD_E2E=OFF \
+            -DRS_ENABLE_DEBUG_SHELL=OFF \
+            -DRS_ENABLE_FAULT_INJECTION=OFF
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure

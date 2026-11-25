@@ -1,0 +1,17 @@
+build/
+build-*/
+build_*/
+Testing/
+cmake-build-*/
+compile_commands.json
+.cache/
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.o
+*.a
+*.so
+*.dylib
+*.bak
