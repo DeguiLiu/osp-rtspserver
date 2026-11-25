@@ -8,7 +8,7 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RelWithDebInfo)
 endif()
 
-set(NEWOSP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../newosp" CACHE PATH "newosp root")
+set(NEWOSP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../newosp" CACHE PATH "newosp root")
 if(NOT EXISTS "${NEWOSP_DIR}/include/osp/event_loop.hpp")
   message(FATAL_ERROR "NEWOSP_DIR does not point at a newosp checkout: ${NEWOSP_DIR}")
 endif()

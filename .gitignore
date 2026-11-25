@@ -15,3 +15,6 @@ compile_commands.json
 *.so
 *.dylib
 *.bak
+
+# Local-only material: design notes stay on disk but are not published.
+docs/local/

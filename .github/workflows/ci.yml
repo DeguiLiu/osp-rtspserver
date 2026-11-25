@@ -5,18 +5,23 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  build-and-test:
+  host-test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        build_type: [ Debug, Release ]
+        build_type: [ Debug, RelWithDebInfo ]
 
     steps:
       - uses: actions/checkout@v5
@@ -36,7 +41,7 @@ jobs:
 
       - name: Configure
         run: |
-          cmake -S impl -B build \
+          cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
             -DNEWOSP_DIR="${{ github.workspace }}/newosp" \
             -DRS_BUILD_E2E=ON \
@@ -65,7 +70,7 @@ jobs:
 
       - name: Configure
         run: |
-          cmake -S impl -B build \
+          cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DNEWOSP_DIR="${{ github.workspace }}/newosp" \
             -DRS_BUILD_E2E=OFF \
@@ -77,3 +82,78 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+  sanitizers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Checkout newosp
+        uses: actions/checkout@v5
+        with:
+          repository: DeguiLiu/newosp
+          ref: 3062194807113c8b139a0197786cbab9bd2638a7
+          path: newosp
+
+      # ASan cannot map its shadow under kernel 6.5+ high-entropy ASLR
+      # (vm.mmap_rnd_bits=32); binaries otherwise die with DEADLYSIGNAL
+      # before main().
+      - name: Reduce ASLR entropy for sanitizers
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
+
+      - name: Configure (ASan/UBSan)
+        run: |
+          cmake -S . -B build-san \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DNEWOSP_DIR="${{ github.workspace }}/newosp" \
+            -DRS_BUILD_E2E=OFF \
+            -DRS_ENABLE_DEBUG_SHELL=OFF \
+            -DRS_ENABLE_FAULT_INJECTION=OFF \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+
+      - name: Build
+        run: cmake --build build-san -j"$(nproc)"
+
+      - name: Test
+        env:
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: ctest --test-dir build-san --output-on-failure
+
+  thread-sanitizer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Checkout newosp
+        uses: actions/checkout@v5
+        with:
+          repository: DeguiLiu/newosp
+          ref: 3062194807113c8b139a0197786cbab9bd2638a7
+          path: newosp
+
+      - name: Reduce ASLR entropy for sanitizers
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
+
+      - name: Configure (TSan)
+        run: |
+          cmake -S . -B build-tsan \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DNEWOSP_DIR="${{ github.workspace }}/newosp" \
+            -DRS_BUILD_E2E=OFF \
+            -DRS_ENABLE_DEBUG_SHELL=OFF \
+            -DRS_ENABLE_FAULT_INJECTION=OFF \
+            -DCMAKE_CXX_FLAGS="-fsanitize=thread -g -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread"
+
+      - name: Build
+        run: cmake --build build-tsan -j"$(nproc)"
+
+      - name: Test
+        env:
+          TSAN_OPTIONS: halt_on_error=1
+        run: setarch "$(uname -m)" -R ctest --test-dir build-tsan --output-on-failure

@@ -1,8 +1,15 @@
-# RS500 RTSP Server（基于 newosp，v1 实现）
+[English](README.md) | **中文**
+
+# osp-rtspserver
+
+[![CI](https://github.com/DeguiLiu/osp-rtspserver/actions/workflows/ci.yml/badge.svg)](https://github.com/DeguiLiu/osp-rtspserver/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+基于 [newosp](https://github.com/DeguiLiu/newosp) 的固定容量 RTSP 1.0 服务端。单 Reactor 网络线程独占 listener、RTSP TCP、RTP/RTCP socket 和定时器；编码器通过有界 `FrameIngress`、SPSC 队列和 `Wake()` 接入。媒体路径运行期不分配堆内存，客户端之间只传 `FrameDesc`，不复制 AU payload。
 
 ## 现状
 
-本目录是《基于 newosp 的 RTSP Server 详细设计方案》的落地实现。范围：单视频轨道（H.264 或 H.265，按媒体源二选一、启动时自动检测）、RTSP 1.0、最多 16 个并发 TCP 控制连接、UDP 单播与 TCP interleaved 两种传输、RTCP SR/RR、`-fno-exceptions -fno-rtti`。
+范围：单视频轨道（H.264 或 H.265，按媒体源二选一、启动时自动检测）、RTSP 1.0、最多 16 个并发 TCP 控制连接、UDP 单播与 TCP interleaved 两种传输、RTCP SR/RR、`-fno-exceptions -fno-rtti`。
 
 未实现：音频、TLS、鉴权、组播、文件回放、录制、PLI/FIR、PAUSE、多轨/多会话、向其他服务器推流、Windows 采集示例。参数集更新已实现，但按设计 §9.4 不做热切换：旧会话被关闭，客户端重新 DESCRIBE/SETUP。
 
@@ -28,24 +35,25 @@
 ## 目录
 
 ```
-impl/
-  include/rs/        公共头（冻结接口）
-  src/               实现
-  tests/             单元测试 + 端到端测试
-  tools/             测试流生成器
-  examples/          外部编码器接入示例
-  scripts/           构建、压力测试脚本
-  docs/测试报告.md   x86 实测记录
+include/rs/        公共头（冻结接口）
+src/               实现
+tests/             单元测试 + 端到端测试
+tools/             测试流生成器
+examples/          外部编码器接入示例
+scripts/           构建、压力测试脚本
+docs/              测试报告、评审与调试设计
 ```
 
 ## 构建与测试
 
 ```bash
-cd /home/dgliu/workspace/osp-rtspserver/impl
+git clone git@github.com:DeguiLiu/newosp.git ../newosp
 cmake -S . -B build -DRS_BUILD_E2E=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build -j"$(nproc)"
 ctest --test-dir build --output-on-failure
 ```
+
+`NEWOSP_DIR` 可覆盖 newosp 路径。基线 `newosp 0.9.6` 可直接构建；若 newosp 带有 `Accept4`、`IoEvent::kRdhup`、`EventLoop::HasFailed` 扩展，CMake 自动检测并启用，否则回退到 `accept` + `fcntl`、`read()==0` 半关闭和普通 loop 退出路径。
 
 强制选项：`RS_NO_EXCEPTIONS=ON`（默认）给全部自编译目标加 `-fno-exceptions -fno-rtti`；`RS_SANITIZE=ON` 使用 ASan+UBSan（与 TSan 分开构建）。
 

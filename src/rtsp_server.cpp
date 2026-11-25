@@ -361,13 +361,14 @@ void RtspServer::Stop() noexcept {
     return;
   }
   stop_requested_.store(true, std::memory_order_release);
-  // §9.5: refuse new frames, stop the listener, then drain the loop before
-  // destroying anything it touches. The external producer is stopped by main.
+  // §9.5: refuse new frames, then stop and join the loop before touching the
+  // poller or listener. RemoveFd/Close from this thread would otherwise race
+  // with Wait() inside the loop thread.
   ingress_.Stop();
-  CloseListener();
   EventLoop::Stop();
   Wake();
   JoinThreads();
+  CloseListener();
   // The loop has returned: nobody can push empty slots any more, so the
   // producer's local slot can be handed back without breaking the SPSC rule.
   ingress_.ReleaseProducerSlot();

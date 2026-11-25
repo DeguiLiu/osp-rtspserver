@@ -11,6 +11,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -24,9 +25,11 @@ constexpr uint16_t kPort = 18586U;
 uint8_t g_old_sps[4] = {0x67, 0x42, 0xC0, 0x1F};
 uint8_t g_new_sps[4] = {0x67, 0x42, 0xC0, 0x1E};
 uint8_t g_pps[4] = {0x68, 0xCE, 0x3C, 0x80};
-uint32_t g_idr_calls = 0U;
+std::atomic<uint32_t> g_idr_calls{0U};
 
-void OnIdrRequest(void* ctx) noexcept { ++*static_cast<uint32_t*>(ctx); }
+void OnIdrRequest(void* ctx) noexcept {
+  static_cast<std::atomic<uint32_t>*>(ctx)->fetch_add(1U, std::memory_order_relaxed);
+}
 
 rs::TrackParams MakeParams(const uint8_t* sps) {
   rs::TrackParams params;
@@ -154,10 +157,10 @@ int main() {
                 static_cast<unsigned>(kPort), session.c_str());
   RS_CHECK(SendAll(client, play));
   // The PLAY 200 is deferred until the first IDR, so only the hook is checked.
-  for (uint32_t waited = 0U; waited < 1000U && g_idr_calls == 0U; waited += 20U) {
+  for (uint32_t waited = 0U; waited < 1000U && g_idr_calls.load(std::memory_order_relaxed) == 0U; waited += 20U) {
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
   }
-  RS_CHECK_EQ(g_idr_calls, 1U);
+  RS_CHECK_EQ(g_idr_calls.load(std::memory_order_relaxed), 1U);
   char teardown[320];
   std::snprintf(teardown, sizeof(teardown),
                 "TEARDOWN rtsp://127.0.0.1:%u/live/trackID=0 RTSP/1.0\r\nCSeq: 4\r\nSession: %s\r\n\r\n",
