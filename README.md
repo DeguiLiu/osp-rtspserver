@@ -31,6 +31,7 @@ CSDN-RtspServer轻量级RTSP服务器和推流器.md   PHZ76/RtspServer 参考�
 ## 构建与测试
 
 `newosp` 默认查找与仓库同级的 `../newosp`；也可用 `NEWOSP_DIR` 指定。
+基线 `newosp 0.9.6` 可直接构建；若本地 newosp 带有 `Accept4`、`IoEvent::kRdhup`、`EventLoop::HasFailed` 扩展，CMake 会自动检测并启用，否则回退到 `accept` + `fcntl`、`read()==0` 半关闭和普通 loop 退出路径。
 
 ```bash
 git clone git@github.com:DeguiLiu/newosp.git

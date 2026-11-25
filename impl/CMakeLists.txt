@@ -19,6 +19,19 @@ set(OSP_WITH_NETWORK ON CACHE BOOL "" FORCE)
 set(OSP_CONFIG_INI OFF CACHE BOOL "" FORCE)
 add_subdirectory("${NEWOSP_DIR}" "${CMAKE_BINARY_DIR}/newosp")
 
+# Optional newosp extensions used when the checked-out baseline provides them.
+# The upstream 0.9.6 tag lacks these, so the server keeps a portable fallback.
+include(CheckCXXSourceCompiles)
+set(CMAKE_REQUIRED_INCLUDES "${NEWOSP_DIR}/include")
+check_cxx_source_compiles("#include \"osp/io_poller.hpp\"
+int main() { auto v = osp::IoEvent::kRdhup; (void)v; return 0; }" RS_HAVE_NEWOSP_RDHUP)
+check_cxx_source_compiles("#include \"osp/socket.hpp\"
+int main() { auto fn = &osp::TcpListener::Accept4; (void)fn; return 0; }" RS_HAVE_NEWOSP_ACCEPT4)
+check_cxx_source_compiles("#include \"osp/event_loop.hpp\"
+struct D : osp::EventLoop<D> {};
+int main() { auto fn = &D::HasFailed; (void)fn; return 0; }" RS_HAVE_NEWOSP_HASFAILED)
+unset(CMAKE_REQUIRED_INCLUDES)
+
 option(RS_NO_EXCEPTIONS "Build with -fno-exceptions -fno-rtti" ON)
 option(RS_SANITIZE "Build with ASan+UBSan" OFF)
 option(RS_BUILD_E2E "Build end-to-end tests that spawn the demo server" ON)
@@ -53,6 +66,15 @@ target_include_directories(rs_core PUBLIC include)
 target_link_libraries(rs_core PUBLIC osp)
 target_compile_options(rs_core PRIVATE ${RS_WARN_FLAGS})
 target_compile_definitions(rs_core PUBLIC OSP_HAS_NETWORK=1)
+if(RS_HAVE_NEWOSP_RDHUP)
+  target_compile_definitions(rs_core PUBLIC RS_HAVE_NEWOSP_RDHUP=1)
+endif()
+if(RS_HAVE_NEWOSP_ACCEPT4)
+  target_compile_definitions(rs_core PUBLIC RS_HAVE_NEWOSP_ACCEPT4=1)
+endif()
+if(RS_HAVE_NEWOSP_HASFAILED)
+  target_compile_definitions(rs_core PUBLIC RS_HAVE_NEWOSP_HASFAILED=1)
+endif()
 
 add_executable(rtspserver_demo src/main.cpp)
 target_link_libraries(rtspserver_demo PRIVATE rs_core)

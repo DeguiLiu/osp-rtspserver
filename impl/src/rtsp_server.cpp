@@ -81,7 +81,12 @@ constexpr uint8_t kReadable = static_cast<uint8_t>(osp::IoEvent::kReadable);
 constexpr uint8_t kWritable = static_cast<uint8_t>(osp::IoEvent::kWritable);
 constexpr uint8_t kError = static_cast<uint8_t>(osp::IoEvent::kError);
 constexpr uint8_t kHangup = static_cast<uint8_t>(osp::IoEvent::kHangup);
+#if defined(RS_HAVE_NEWOSP_RDHUP)
 constexpr uint8_t kRdhup = static_cast<uint8_t>(osp::IoEvent::kRdhup);
+#else
+// Upstream newosp reports FIN as kReadable; read()==0 closes the connection.
+constexpr uint8_t kRdhup = 0U;
+#endif
 constexpr uint8_t kReadInterest = static_cast<uint8_t>(kReadable | kError | kHangup | kRdhup);
 
 static_assert(std::atomic<uint32_t>::is_always_lock_free, "source counters must stay lock-free on ARMv7");
@@ -342,9 +347,11 @@ void RtspServer::JoinThreads() noexcept {
 void* RtspServer::LoopThreadEntry(void* self) noexcept {
   auto* server = static_cast<RtspServer*>(self);
   server->EventLoop::Run();
+#if defined(RS_HAVE_NEWOSP_HASFAILED)
   if (server->HasFailed()) {
     server->stats_.loop_failed = true;
   }
+#endif
   server->PublishStats();
   return nullptr;
 }
@@ -514,7 +521,11 @@ void RtspServer::OnListenerReadable(uint64_t now) noexcept {
   }
   for (uint32_t round = 0U; round < kMaxConnections; ++round) {
     osp::SocketAddress peer;
+#if defined(RS_HAVE_NEWOSP_ACCEPT4)
     auto accepted = listener_.Accept4(peer, SOCK_NONBLOCK | SOCK_CLOEXEC);
+#else
+    auto accepted = listener_.Accept(peer);
+#endif
     if (!accepted.has_value()) {
       if (errno == EMFILE || errno == ENFILE) {
         // Remove the level-triggered listener instead of re-entering accept()
