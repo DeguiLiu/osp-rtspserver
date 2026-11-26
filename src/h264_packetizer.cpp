@@ -78,7 +78,8 @@ bool NextNalUnit(const uint8_t* au, uint32_t au_len, uint32_t& offset, NalUnit& 
     --nal_end;
   }
   if (found) {
-    out.data = osp::byte_span(reinterpret_cast<const std::byte*>(au + nal_start), nal_end - nal_start);
+    out.data =
+        osp::byte_span(static_cast<const std::byte*>(static_cast<const void*>(au + nal_start)), nal_end - nal_start);
     out.type = (nal_end > nal_start) ? static_cast<uint8_t>(au[nal_start] & kNalTypeMask) : 0U;
     offset = has_next ? next : au_len;
   } else {
@@ -171,7 +172,7 @@ osp::expected<RtpPacket, PacketizeError> H264Packetizer::Next(const uint8_t* au,
     RtpPacket packet;
     packet.header = cursor.rtp_header.data();
     packet.header_len = kRtpHeaderBytes;
-    packet.payload = reinterpret_cast<const uint8_t*>(nal.data.data());
+    packet.payload = static_cast<const uint8_t*>(static_cast<const void*>(nal.data.data()));
     packet.payload_len = nal_len;
     packet.marker = last;
     cursor.nal_offset = next_offset;
@@ -207,7 +208,7 @@ osp::expected<RtpPacket, PacketizeError> H264Packetizer::Next(const uint8_t* au,
   packet.header_len = kRtpHeaderBytes;
   packet.prefix = cursor.fu_header.data();
   packet.prefix_len = kFuHeaderBytes;
-  packet.payload = reinterpret_cast<const uint8_t*>(nal.data.data() + start);
+  packet.payload = static_cast<const uint8_t*>(static_cast<const void*>(nal.data.data() + start));
   packet.payload_len = chunk;
   packet.marker = last;
   if (last_fragment) {

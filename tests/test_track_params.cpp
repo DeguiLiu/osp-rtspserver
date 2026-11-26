@@ -69,7 +69,7 @@ int ConnectClient() {
   addr.sin_family = AF_INET;
   addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
   addr.sin_port = htons(kPort);
-  if (::connect(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0) {
+  if (::connect(fd, static_cast<sockaddr*>(static_cast<void*>(&addr)), sizeof(addr)) != 0) {
     static_cast<void>(::close(fd));
     return -1;
   }

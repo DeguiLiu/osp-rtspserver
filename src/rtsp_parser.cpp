@@ -70,7 +70,7 @@ bool ParseDecimal(osp::byte_span value, uint32_t& out) noexcept {
   if (0U == value.size()) {
     return false;
   }
-  const char* const first = reinterpret_cast<const char*>(value.data());
+  const char* const first = static_cast<const char*>(static_cast<const void*>(value.data()));
   const char* const last = first + value.size();
   uint32_t parsed = 0U;
   const std::from_chars_result rc = std::from_chars(first, last, parsed, 10);
@@ -166,9 +166,9 @@ bool ParseStartLine(const uint8_t* p, uint32_t line_len, RtspRequest& req) noexc
     ok = (c >= 0x21 && c <= 0x7E);
   }
   if (ok) {
-    req.method_raw = osp::byte_span(reinterpret_cast<const std::byte*>(p), method_len);
-    req.uri = osp::byte_span(reinterpret_cast<const std::byte*>(p + sp1 + 1U), uri_len);
-    req.version = osp::byte_span(reinterpret_cast<const std::byte*>(p + ver_start), ver_len);
+    req.method_raw = osp::byte_span(static_cast<const std::byte*>(static_cast<const void*>(p)), method_len);
+    req.uri = osp::byte_span(static_cast<const std::byte*>(static_cast<const void*>(p + sp1 + 1U)), uri_len);
+    req.version = osp::byte_span(static_cast<const std::byte*>(static_cast<const void*>(p + ver_start)), ver_len);
     req.method = ParseMethod(req.method_raw);
   }
   return ok;
@@ -195,8 +195,8 @@ bool ParseHeaderLine(const uint8_t* p, uint32_t start, uint32_t eol, HeaderView&
     ok = (p[i] >= 0x20 || '\t' == p[i]) && (0x7F != p[i]);
   }
   if (ok) {
-    out.name = osp::byte_span(reinterpret_cast<const std::byte*>(p + start), colon - start);
-    out.value = osp::byte_span(reinterpret_cast<const std::byte*>(p + vs), ve - vs);
+    out.name = osp::byte_span(static_cast<const std::byte*>(static_cast<const void*>(p + start)), colon - start);
+    out.value = osp::byte_span(static_cast<const std::byte*>(static_cast<const void*>(p + vs)), ve - vs);
   }
   return ok;
 }
@@ -251,7 +251,8 @@ osp::expected<void, ParseError> RtspParser::Drain(const ParserCallbacks& cb) noe
         if (nullptr != cb.on_interleaved) {
           InterleavedFrame frame;
           frame.channel = buf_[pos + 1U];
-          frame.payload = osp::byte_span(reinterpret_cast<const std::byte*>(buf_ + pos + 4U), payload_len);
+          frame.payload =
+              osp::byte_span(static_cast<const std::byte*>(static_cast<const void*>(buf_ + pos + 4U)), payload_len);
           cb.on_interleaved(cb.ctx, frame);
         }
         pos += 4U + payload_len;
@@ -274,7 +275,7 @@ osp::expected<void, ParseError> RtspParser::Drain(const ParserCallbacks& cb) noe
       } else {
         request_.~RtspRequest();
         RtspRequest& req = *::new (static_cast<void*>(&request_)) RtspRequest{};
-        if (ParseHead(reinterpret_cast<const char*>(buf_ + pos), head_len, req) == false) {
+        if (ParseHead(static_cast<const char*>(static_cast<const void*>(buf_ + pos)), head_len, req) == false) {
           ok = false;
         } else {
           uint32_t body_len = 0U;
@@ -298,7 +299,8 @@ osp::expected<void, ParseError> RtspParser::Drain(const ParserCallbacks& cb) noe
             if ((len_ - pos) < total) {
               break;  // Body not fully received.
             }
-            req.body = osp::byte_span(reinterpret_cast<const std::byte*>(buf_ + pos + head_len), body_len);
+            req.body = osp::byte_span(static_cast<const std::byte*>(static_cast<const void*>(buf_ + pos + head_len)),
+                                      body_len);
             if (nullptr != cb.on_request) {
               cb.on_request(cb.ctx, req);
             }
@@ -323,7 +325,7 @@ osp::expected<void, ParseError> RtspParser::Drain(const ParserCallbacks& cb) noe
 }
 
 bool RtspParser::ParseHead(const char* head, uint32_t head_len, RtspRequest& req) noexcept {
-  const uint8_t* p = reinterpret_cast<const uint8_t*>(head);
+  const uint8_t* p = static_cast<const uint8_t*>(static_cast<const void*>(head));
   uint32_t eol = 0U;
   if (FindCrlf(p, 0U, head_len, eol) == false || ParseStartLine(p, eol, req) == false) {
     return false;

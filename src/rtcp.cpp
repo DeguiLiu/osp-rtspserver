@@ -117,7 +117,7 @@ osp::expected<uint32_t, RtcpError> BuildSenderReport(osp::writable_byte_span out
   if (nullptr == out.data() || out.size() < static_cast<size_t>(kSenderReportBytes)) {
     return osp::expected<uint32_t, RtcpError>::error(RtcpError::kBufferTooSmall);
   }
-  uint8_t* p = reinterpret_cast<uint8_t*>(out.data());
+  uint8_t* p = static_cast<uint8_t*>(static_cast<void*>(out.data()));
   const uint64_t seconds = ntp_now_ns / 1000000000ULL;
   const uint64_t fraction_ns = ntp_now_ns % 1000000000ULL;
   const uint32_t ntp_seconds = static_cast<uint32_t>(seconds) + kNtpEpochOffsetSeconds;
@@ -184,7 +184,7 @@ osp::expected<uint32_t, RtcpError> BuildSenderReportWithSdes(osp::writable_byte_
   if (sr.has_value() == false) {
     return osp::expected<uint32_t, RtcpError>::error(sr.get_error());
   }
-  uint8_t* sdes = reinterpret_cast<uint8_t*>(out.data()) + kSenderReportBytes;
+  uint8_t* sdes = static_cast<uint8_t*>(static_cast<void*>(out.data())) + kSenderReportBytes;
   sdes[0] = static_cast<uint8_t>((kRtcpVersion << 6U) | 1U);  // V=2, SC=1 chunk.
   sdes[1] = kPacketTypeSdes;
   WriteBe16(sdes + 2U, static_cast<uint16_t>((sdes_bytes / 4U) - 1U));

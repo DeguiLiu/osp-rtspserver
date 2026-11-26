@@ -39,7 +39,7 @@ bool IsSpace(char c) noexcept {
 }
 
 const uint8_t* Bytes(osp::byte_span s) noexcept {
-  return reinterpret_cast<const uint8_t*>(s.data());
+  return static_cast<const uint8_t*>(static_cast<const void*>(s.data()));
 }
 
 char ToLower(char c) noexcept {
@@ -156,7 +156,7 @@ UriKind ClassifyUri(osp::byte_span uri) noexcept {
   if (uri.size() == 0U || uri.size() > kMaxUriBytes) {
     return UriKind::kMalformed;
   }
-  const char* p = reinterpret_cast<const char*>(uri.data());
+  const char* p = static_cast<const char*>(static_cast<const void*>(uri.data()));
   const uint32_t n = uri.size();
   if (n == 1U && p[0] == '*') {
     return UriKind::kStar;
@@ -184,7 +184,7 @@ UriKind ClassifyUri(osp::byte_span uri) noexcept {
   if (len > 1U && p[n - 1U] == '/') {
     --len;
   }
-  const osp::byte_span path(reinterpret_cast<const std::byte*>(p + pos), len);
+  const osp::byte_span path(static_cast<const std::byte*>(static_cast<const void*>(p + pos)), len);
   if (EqualsLit(path, kAggregatePath)) {
     return UriKind::kAggregate;
   }
@@ -439,8 +439,8 @@ bool RtspSession::ReadRtcp(uint64_t now_ns) noexcept {
       return true;
     }
     const uint32_t bad_before = counters_.rtcp_bad;
-    if (rtcp_.OnDatagram(osp::byte_span(reinterpret_cast<const std::byte*>(buf), got.value()), counters_.rtcp_rr,
-                         counters_.rtcp_bye, counters_.rtcp_bad)) {
+    if (rtcp_.OnDatagram(osp::byte_span(static_cast<const std::byte*>(static_cast<const void*>(buf)), got.value()),
+                         counters_.rtcp_rr, counters_.rtcp_bye, counters_.rtcp_bad)) {
       Close(kCloseTeardown, now_ns);
       return false;
     }
@@ -569,7 +569,7 @@ bool RtspSession::OpenResponse(OutBuf& out, uint16_t status, uint32_t cseq, uint
     return false;
   }
   const osp::writable_byte_span tail = tx_.Tail();
-  out.dst = reinterpret_cast<char*>(tail.data());
+  out.dst = static_cast<char*>(static_cast<void*>(tail.data()));
   out.cap = static_cast<uint32_t>(tail.size());
   out.ok = true;
   BeginResponse(out, status, cseq);
@@ -807,7 +807,7 @@ uint16_t RtspSession::HandleDescribe(const RtspRequest& req, uint32_t cseq, uint
     return 0U;
   }
   char* const body = out.dst + out.cap - kMaxSdpBody;
-  auto sdp = BuildSdp(sp, osp::writable_byte_span(reinterpret_cast<std::byte*>(body), kMaxSdpBody));
+  auto sdp = BuildSdp(sp, osp::writable_byte_span(static_cast<std::byte*>(static_cast<void*>(body)), kMaxSdpBody));
   if (sdp.has_value() == false || sdp.value() == 0U || sdp.value() > kMaxSdpBody) {
     return WriteStatus(StatusCode(RtspStatus::kInternalError), cseq);
   }

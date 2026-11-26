@@ -15,7 +15,7 @@ constexpr uint8_t kH265Sps[] = {0x42, 0x01, 0x01, 0x60};
 constexpr uint8_t kH265Pps[] = {0x44, 0x01, 0xC1};
 
 osp::writable_byte_span Span(char* buf, uint32_t cap) {
-  return osp::writable_byte_span(reinterpret_cast<std::byte*>(buf), cap);
+  return osp::writable_byte_span(static_cast<std::byte*>(static_cast<void*>(buf)), cap);
 }
 
 rs::SdpParams Params() {
@@ -74,25 +74,28 @@ int main() {
   {
     char out[32] = {};
     std::memset(out, 'X', sizeof(out));
-    RS_CHECK_EQ(rs::Base64Encode(reinterpret_cast<const uint8_t*>("f"), 1U, out, sizeof(out)), 4U);
+    RS_CHECK_EQ(rs::Base64Encode(static_cast<const uint8_t*>(static_cast<const void*>("f")), 1U, out, sizeof(out)), 4U);
     RS_CHECK_EQ(std::memcmp(out, "Zg==", 4U), 0);
     RS_CHECK_EQ(out[4], 'X');  // No trailing NUL is written.
     std::memset(out, 'X', sizeof(out));
-    RS_CHECK_EQ(rs::Base64Encode(reinterpret_cast<const uint8_t*>("fo"), 2U, out, sizeof(out)), 4U);
+    RS_CHECK_EQ(rs::Base64Encode(static_cast<const uint8_t*>(static_cast<const void*>("fo")), 2U, out, sizeof(out)),
+                4U);
     RS_CHECK_EQ(std::memcmp(out, "Zm8=", 4U), 0);
     std::memset(out, 'X', sizeof(out));
-    RS_CHECK_EQ(rs::Base64Encode(reinterpret_cast<const uint8_t*>("foo"), 3U, out, sizeof(out)), 4U);
+    RS_CHECK_EQ(rs::Base64Encode(static_cast<const uint8_t*>(static_cast<const void*>("foo")), 3U, out, sizeof(out)),
+                4U);
     RS_CHECK_EQ(std::memcmp(out, "Zm9v", 4U), 0);
     std::memset(out, 'X', sizeof(out));
-    RS_CHECK_EQ(rs::Base64Encode(reinterpret_cast<const uint8_t*>("foobar"), 6U, out, sizeof(out)), 8U);
+    RS_CHECK_EQ(rs::Base64Encode(static_cast<const uint8_t*>(static_cast<const void*>("foobar")), 6U, out, sizeof(out)),
+                8U);
     RS_CHECK_EQ(std::memcmp(out, "Zm9vYmFy", 8U), 0);
   }
 
   // Empty input, insufficient capacity, null input.
   {
     char out[8] = {};
-    RS_CHECK_EQ(rs::Base64Encode(reinterpret_cast<const uint8_t*>(""), 0U, out, sizeof(out)), 0U);
-    RS_CHECK_EQ(rs::Base64Encode(reinterpret_cast<const uint8_t*>("f"), 1U, out, 3U), 0U);
+    RS_CHECK_EQ(rs::Base64Encode(static_cast<const uint8_t*>(static_cast<const void*>("")), 0U, out, sizeof(out)), 0U);
+    RS_CHECK_EQ(rs::Base64Encode(static_cast<const uint8_t*>(static_cast<const void*>("f")), 1U, out, 3U), 0U);
     RS_CHECK_EQ(rs::Base64Encode(nullptr, 1U, out, sizeof(out)), 0U);
     RS_CHECK_EQ(rs::Base64Encode(kSps, sizeof(kSps), nullptr, sizeof(out)), 0U);
   }

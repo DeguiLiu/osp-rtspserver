@@ -91,7 +91,7 @@ rs::ParserCallbacks Callbacks(Capture& c) {
 }
 
 osp::expected<void, rs::ParseError> FeedText(rs::RtspParser& parser, Capture& c, const char* text) {
-  const auto* bytes = reinterpret_cast<const uint8_t*>(text);
+  const auto* bytes = static_cast<const uint8_t*>(static_cast<const void*>(text));
   return parser.Feed(bytes, static_cast<uint32_t>(std::strlen(text)), Callbacks(c));
 }
 
@@ -121,7 +121,7 @@ int main() {
     const uint32_t len = static_cast<uint32_t>(std::strlen(text));
     bool always_ok = true;
     for (uint32_t i = 0U; i < len; ++i) {
-      const auto r = parser.Feed(reinterpret_cast<const uint8_t*>(text + i), 1U, Callbacks(c));
+      const auto r = parser.Feed(static_cast<const uint8_t*>(static_cast<const void*>(text + i)), 1U, Callbacks(c));
       always_ok = always_ok && r.has_value();
     }
     RS_CHECK(always_ok);
@@ -169,7 +169,8 @@ int main() {
     static const char head[] =
         "$\x02\x00\x03\xAA\xBB\xCC"
         "OPTIONS * RTSP/1.0\r\nCSeq: 9\r\n\r\n";
-    const auto r = parser.Feed(reinterpret_cast<const uint8_t*>(head), sizeof(head) - 1U, Callbacks(c));
+    const auto r =
+        parser.Feed(static_cast<const uint8_t*>(static_cast<const void*>(head)), sizeof(head) - 1U, Callbacks(c));
     RS_CHECK(r.has_value());
     RS_CHECK_EQ(c.frames, 1U);
     RS_CHECK_EQ(c.channel, static_cast<uint8_t>(2U));
@@ -184,10 +185,10 @@ int main() {
   {
     rs::RtspParser parser;
     Capture c;
-    auto r = parser.Feed(reinterpret_cast<const uint8_t*>("$\x01\x00"), 3U, Callbacks(c));
+    auto r = parser.Feed(static_cast<const uint8_t*>(static_cast<const void*>("$\x01\x00")), 3U, Callbacks(c));
     RS_CHECK(r.has_value());
     RS_CHECK_EQ(parser.buffered(), 3U);
-    r = parser.Feed(reinterpret_cast<const uint8_t*>("\x02\x10\x20"), 3U, Callbacks(c));
+    r = parser.Feed(static_cast<const uint8_t*>(static_cast<const void*>("\x02\x10\x20")), 3U, Callbacks(c));
     RS_CHECK(r.has_value());
     RS_CHECK_EQ(c.frames, 1U);
     RS_CHECK_EQ(c.channel, static_cast<uint8_t>(1U));
@@ -303,7 +304,7 @@ int main() {
     Capture c3;
     char nul[32] = "OPTIONS * RTSP/1.0\r\n\r\n";
     nul[0] = '\0';
-    r = parser3.Feed(reinterpret_cast<const uint8_t*>(nul), 22U, Callbacks(c3));
+    r = parser3.Feed(static_cast<const uint8_t*>(static_cast<const void*>(nul)), 22U, Callbacks(c3));
     RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::ParseError::kMalformed);
     rs::RtspParser parser4;
@@ -324,8 +325,8 @@ int main() {
       used += static_cast<uint32_t>(n);
     }
     std::snprintf(text + used, sizeof(text) - used, "\r\n");
-    const auto r =
-        parser.Feed(reinterpret_cast<const uint8_t*>(text), static_cast<uint32_t>(std::strlen(text)), Callbacks(c));
+    const auto r = parser.Feed(static_cast<const uint8_t*>(static_cast<const void*>(text)),
+                               static_cast<uint32_t>(std::strlen(text)), Callbacks(c));
     RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::ParseError::kTooManyHeaders);
   }
@@ -340,7 +341,7 @@ int main() {
     used += 520U;
     std::memcpy(text + used, "\r\n\r\n", 4U);
     used += 4U;
-    const auto r = parser.Feed(reinterpret_cast<const uint8_t*>(text), used, Callbacks(c));
+    const auto r = parser.Feed(static_cast<const uint8_t*>(static_cast<const void*>(text)), used, Callbacks(c));
     RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::ParseError::kMalformed);
   }
@@ -349,12 +350,12 @@ int main() {
   {
     rs::RtspParser parser;
     Capture c;
-    auto r = parser.Feed(reinterpret_cast<const uint8_t*>("$\x01\xFF\xFF"), 4U, Callbacks(c));
+    auto r = parser.Feed(static_cast<const uint8_t*>(static_cast<const void*>("$\x01\xFF\xFF")), 4U, Callbacks(c));
     RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::ParseError::kBadInterleaved);
     rs::RtspParser parser2;
     Capture c2;
-    r = parser2.Feed(reinterpret_cast<const uint8_t*>("$\x01\x00\x00"), 4U, Callbacks(c2));
+    r = parser2.Feed(static_cast<const uint8_t*>(static_cast<const void*>("$\x01\x00\x00")), 4U, Callbacks(c2));
     RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::ParseError::kBadInterleaved);
   }
@@ -371,10 +372,12 @@ int main() {
   }
 
   // Method helpers.
-  RS_CHECK_EQ(rs::ParseMethod(osp::byte_span(reinterpret_cast<const std::byte*>("GET_PARAMETER"), 13U)),
-              rs::Method::kGetParameter);
-  RS_CHECK_EQ(rs::ParseMethod(osp::byte_span(reinterpret_cast<const std::byte*>("get_parameter"), 13U)),
-              rs::Method::kUnknown);
+  RS_CHECK_EQ(
+      rs::ParseMethod(osp::byte_span(static_cast<const std::byte*>(static_cast<const void*>("GET_PARAMETER")), 13U)),
+      rs::Method::kGetParameter);
+  RS_CHECK_EQ(
+      rs::ParseMethod(osp::byte_span(static_cast<const std::byte*>(static_cast<const void*>("get_parameter")), 13U)),
+      rs::Method::kUnknown);
   RS_CHECK_EQ(std::strcmp(rs::MethodName(rs::Method::kTeardown), "TEARDOWN"), 0);
   RS_CHECK_EQ(std::strcmp(rs::MethodName(rs::Method::kUnknown), "UNKNOWN"), 0);
 
@@ -382,7 +385,8 @@ int main() {
   {
     rs::RtspParser parser;
     Capture c;
-    const auto r = parser.Feed(reinterpret_cast<const uint8_t*>("OPTIONS * RTSP/1.0\r\nCSeq: "), 25U, Callbacks(c));
+    const auto r = parser.Feed(static_cast<const uint8_t*>(static_cast<const void*>("OPTIONS * RTSP/1.0\r\nCSeq: ")),
+                               25U, Callbacks(c));
     RS_CHECK(r.has_value());
     RS_CHECK(parser.buffered() > 0U);
     parser.Reset();

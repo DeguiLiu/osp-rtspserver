@@ -86,7 +86,7 @@ bool OpenOne(osp::UdpSocket& sock, uint32_t dest_ipv4, uint16_t dest_port, uint1
   if (ok) {
     sockaddr_in bound{};
     socklen_t bound_len = static_cast<socklen_t>(sizeof(bound));
-    ok = osp::socket_api::GetSockName(sock.Fd(), reinterpret_cast<sockaddr*>(&bound), &bound_len) >= 0;
+    ok = osp::socket_api::GetSockName(sock.Fd(), static_cast<sockaddr*>(static_cast<void*>(&bound)), &bound_len) >= 0;
     if (ok) {
       local_port = osp::socket_api::Ntohs(bound.sin_port);
     }

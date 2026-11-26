@@ -60,7 +60,7 @@ class Writer {
     return fits;
   }
 
-  char* Tail() noexcept { return reinterpret_cast<char*>(out_.data() + pos_); }
+  char* Tail() noexcept { return static_cast<char*>(static_cast<void*>(out_.data() + pos_)); }
   uint32_t Remaining() const noexcept { return static_cast<uint32_t>(out_.size()) - pos_; }
   void Advance(uint32_t n) noexcept { pos_ += n; }
   uint32_t size() const noexcept { return pos_; }

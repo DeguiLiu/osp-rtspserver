@@ -24,7 +24,7 @@ using rs::WriteInterleaved;
 using rs::WriteInterleavedRaw;
 
 const uint8_t* AsBytes(const std::byte* data) noexcept {
-  return reinterpret_cast<const uint8_t*>(data);
+  return static_cast<const uint8_t*>(static_cast<const void*>(data));
 }
 
 int TestInterleavedLayout() {
@@ -226,9 +226,9 @@ int TestUdpLoopback() {
   local.sin_family = AF_INET;
   local.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
   local.sin_port = 0;
-  RS_CHECK_EQ(::bind(fd, reinterpret_cast<const struct sockaddr*>(&local), sizeof(local)), 0);
+  RS_CHECK_EQ(::bind(fd, static_cast<const struct sockaddr*>(static_cast<const void*>(&local)), sizeof(local)), 0);
   socklen_t local_len = static_cast<socklen_t>(sizeof(local));
-  RS_CHECK_EQ(::getsockname(fd, reinterpret_cast<struct sockaddr*>(&local), &local_len), 0);
+  RS_CHECK_EQ(::getsockname(fd, static_cast<struct sockaddr*>(static_cast<void*>(&local)), &local_len), 0);
   struct timeval timeout{};
   timeout.tv_sec = 2;
   timeout.tv_usec = 0;

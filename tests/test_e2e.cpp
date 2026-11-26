@@ -270,7 +270,7 @@ bool PortFree(uint16_t port) noexcept {
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    free_port = 0 == ::bind(fd, reinterpret_cast<const struct sockaddr*>(&addr), sizeof(addr));
+    free_port = 0 == ::bind(fd, static_cast<const struct sockaddr*>(static_cast<const void*>(&addr)), sizeof(addr));
     ::close(fd);
   }
   return free_port;
@@ -436,7 +436,8 @@ CaseStart TryStartServer(Ctx& ctx, uint16_t port, const std::vector<std::string>
         addr.sin_family = AF_INET;
         addr.sin_port = htons(ctx.port);
         addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        out.started = 0 == ::connect(fd, reinterpret_cast<const struct sockaddr*>(&addr), sizeof(addr));
+        out.started =
+            0 == ::connect(fd, static_cast<const struct sockaddr*>(static_cast<const void*>(&addr)), sizeof(addr));
         ::close(fd);
       }
       if (out.started) {
@@ -888,10 +889,12 @@ bool BindUdpPair(uint16_t& base_port, int& rtp_fd, int& rtcp_fd, std::string& er
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     addr.sin_port = htons(static_cast<uint16_t>(candidate));
     rtp_fd = ::socket(AF_INET, SOCK_DGRAM, 0);
-    if (rtp_fd >= 0 && 0 == ::bind(rtp_fd, reinterpret_cast<const struct sockaddr*>(&addr), sizeof(addr))) {
+    if (rtp_fd >= 0 &&
+        0 == ::bind(rtp_fd, static_cast<const struct sockaddr*>(static_cast<const void*>(&addr)), sizeof(addr))) {
       addr.sin_port = htons(static_cast<uint16_t>(candidate + 1U));
       rtcp_fd = ::socket(AF_INET, SOCK_DGRAM, 0);
-      ok = rtcp_fd >= 0 && 0 == ::bind(rtcp_fd, reinterpret_cast<const struct sockaddr*>(&addr), sizeof(addr));
+      ok = rtcp_fd >= 0 &&
+           0 == ::bind(rtcp_fd, static_cast<const struct sockaddr*>(static_cast<const void*>(&addr)), sizeof(addr));
       if (ok) {
         base_port = static_cast<uint16_t>(candidate);
       } else {

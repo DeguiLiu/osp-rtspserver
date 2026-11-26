@@ -170,7 +170,7 @@ bool Client::Connect(const std::string& host, uint16_t port, int timeout_ms, std
     }
     const int flags = ::fcntl(fd_, F_GETFL, 0);
     static_cast<void>(::fcntl(fd_, F_SETFL, flags | O_NONBLOCK));
-    if (0 == ::connect(fd_, reinterpret_cast<const struct sockaddr*>(&addr), sizeof(addr))) {
+    if (0 == ::connect(fd_, static_cast<const struct sockaddr*>(static_cast<const void*>(&addr)), sizeof(addr))) {
       ok = true;
     } else if (EINPROGRESS != errno) {
       last_err = (ECONNREFUSED == errno) ? "connection refused (listener closed or not bound)" : std::strerror(errno);
@@ -305,7 +305,7 @@ bool Client::PumpOnce(bool& consumed, std::string& err) {
       }
       Response response;
       std::vector<std::pair<std::string, std::string>> headers;
-      const std::string head(reinterpret_cast<const char*>(data), head_len);
+      const std::string head(static_cast<const char*>(static_cast<const void*>(data)), head_len);
       const size_t first_eol = head.find("\r\n");
       const std::string status_line = head.substr(0U, first_eol);
       char* end = nullptr;
@@ -336,7 +336,7 @@ bool Client::PumpOnce(bool& consumed, std::string& err) {
           return true;
         } else {
           response.headers = std::move(headers);
-          response.body.assign(reinterpret_cast<const char*>(data + head_len), body_len);
+          response.body.assign(static_cast<const char*>(static_cast<const void*>(data + head_len)), body_len);
           if (awaiting_response_ == false) {
             ++stray_responses_;
           }

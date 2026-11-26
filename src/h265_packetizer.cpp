@@ -128,7 +128,7 @@ osp::expected<RtpPacket, PacketizeError> EmitSingle(const uint8_t* au, uint32_t 
     cursor.in_au = false;
     cursor.marker_sent = true;
   }
-  return MakePacket(cursor, ssrc, reinterpret_cast<const uint8_t*>(nal.data.data()),
+  return MakePacket(cursor, ssrc, static_cast<const uint8_t*>(static_cast<const void*>(nal.data.data())),
                     static_cast<uint32_t>(nal.data.size()), last);
 }
 
@@ -161,7 +161,7 @@ osp::expected<RtpPacket, PacketizeError> EmitFu(const uint8_t* au, uint32_t next
     packet.header_len = kRtpHeaderBytes;
     packet.prefix = cursor.fu_header.data();
     packet.prefix_len = kFuHeaderBytes;
-    packet.payload = reinterpret_cast<const uint8_t*>(nal.data.data() + start);
+    packet.payload = static_cast<const uint8_t*>(static_cast<const void*>(nal.data.data() + start));
     packet.payload_len = chunk;
     packet.marker = last;
     result = osp::expected<RtpPacket, PacketizeError>::success(packet);
@@ -192,8 +192,8 @@ osp::expected<RtpPacket, PacketizeError> EmitNal(const uint8_t* au, HevcCursor& 
     cursor.in_au = false;
     result = osp::expected<RtpPacket, PacketizeError>::error(
         OnlyZeros(au, cursor.nal_offset, cursor.au_len) ? PacketizeError::kEndOfAu : PacketizeError::kBadNal);
-  } else if (ParseNalHeader(reinterpret_cast<const uint8_t*>(nal.data.data()), static_cast<uint32_t>(nal.data.size()),
-                            type) == false) {
+  } else if (ParseNalHeader(static_cast<const uint8_t*>(static_cast<const void*>(nal.data.data())),
+                            static_cast<uint32_t>(nal.data.size()), type) == false) {
     cursor.in_au = false;
   } else if ((0U == cursor.frag_offset) && (nal.data.size() <= kRtpPayloadMax)) {
     result = EmitSingle(au, next_offset, nal, cursor, ssrc);
@@ -220,7 +220,8 @@ bool NextHevcNalUnit(const uint8_t* au, uint32_t au_len, uint32_t& offset, NalUn
   // A start code without a two-byte NAL header is truncated, not a NAL unit.
   const bool ok = found && ((nal_end - nal_start) >= 2U);
   if (ok) {
-    out.data = osp::byte_span(reinterpret_cast<const std::byte*>(au + nal_start), nal_end - nal_start);
+    out.data =
+        osp::byte_span(static_cast<const std::byte*>(static_cast<const void*>(au + nal_start)), nal_end - nal_start);
     out.type = static_cast<uint8_t>((au[nal_start] >> kHevcTypeShift) & kHevcTypeMask);
     offset = has_next ? next : au_len;
   } else {

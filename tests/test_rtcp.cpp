@@ -9,7 +9,7 @@
 namespace {
 
 osp::writable_byte_span Span(uint8_t* buf, uint32_t cap) {
-  return osp::writable_byte_span(reinterpret_cast<std::byte*>(buf), cap);
+  return osp::writable_byte_span(static_cast<std::byte*>(static_cast<void*>(buf)), cap);
 }
 
 void Put16(uint8_t* p, uint16_t value) {

@@ -8,6 +8,7 @@
 #include "osp/span.hpp"
 #include "rs/config.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 
@@ -43,7 +44,7 @@ class TxStream final {
   }
 
   [[nodiscard]] osp::writable_byte_span Tail() noexcept {
-    return osp::writable_byte_span(reinterpret_cast<std::byte*>(buf_ + len_), kCapacity - len_);
+    return osp::writable_byte_span(buf_ + len_, kCapacity - len_);
   }
 
   [[nodiscard]] bool Commit(uint32_t bytes) noexcept {
@@ -54,9 +55,7 @@ class TxStream final {
     return true;
   }
 
-  [[nodiscard]] osp::byte_span Pending() const noexcept {
-    return osp::byte_span(reinterpret_cast<const std::byte*>(buf_ + off_), Unflushed());
-  }
+  [[nodiscard]] osp::byte_span Pending() const noexcept { return osp::byte_span(buf_ + off_, Unflushed()); }
 
   void Consume(uint32_t bytes, uint64_t now_ns) noexcept {
     const uint32_t pending = Unflushed();
@@ -82,7 +81,7 @@ class TxStream final {
     len_ = remain;
   }
 
-  alignas(kCacheLineBytes) uint8_t buf_[kCapacity] = {};
+  alignas(kCacheLineBytes) std::byte buf_[kCapacity] = {};
   uint32_t len_ = 0U;
   uint32_t off_ = 0U;
   uint64_t progress_ns_ = 0U;

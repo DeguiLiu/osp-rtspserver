@@ -32,7 +32,7 @@ namespace {
 using namespace rs;
 
 osp::byte_span Span(const char* s) {
-  return osp::byte_span(reinterpret_cast<const std::byte*>(s), std::strlen(s));
+  return osp::byte_span(static_cast<const std::byte*>(static_cast<const void*>(s)), std::strlen(s));
 }
 
 struct Req {
@@ -193,7 +193,7 @@ bool SdpReady(const TrackParams& p) {
   sp.sps_len = p.sps_len;
   sp.pps = p.pps;
   sp.pps_len = p.pps_len;
-  auto r = BuildSdp(sp, osp::writable_byte_span(reinterpret_cast<std::byte*>(body), sizeof(body)));
+  auto r = BuildSdp(sp, osp::writable_byte_span(static_cast<std::byte*>(static_cast<void*>(body)), sizeof(body)));
   return r.has_value() && r.value() > 0U;
 }
 
@@ -225,7 +225,8 @@ bool InterleavedReady() {
   pkt.header_len = 12U;
   pkt.payload = rtp + 12;
   pkt.payload_len = 1U;
-  auto wrote = WriteInterleaved(osp::writable_byte_span(reinterpret_cast<std::byte*>(out), sizeof(out)), 0U, pkt);
+  auto wrote =
+      WriteInterleaved(osp::writable_byte_span(static_cast<std::byte*>(static_cast<void*>(out)), sizeof(out)), 0U, pkt);
   return wrote.has_value();
 }
 
@@ -462,7 +463,7 @@ int TestPlayRtpInfoMatchesFirstPacket() {
   if (PacketizerReady() && InterleavedReady()) {
     const char* frame = std::strstr(buf, "\r\n\r\n$");
     RS_CHECK(frame != nullptr);
-    const uint8_t* p = reinterpret_cast<const uint8_t*>(frame + 4);
+    const uint8_t* p = static_cast<const uint8_t*>(static_cast<const void*>(frame + 4));
     RS_CHECK_EQ(p[0], '$');
     // '$' + channel + length + RTP header: seq is RTP bytes 2..3, ts bytes 4..7.
     const uint32_t rtp_seq = (static_cast<uint32_t>(p[6]) << 8U) | p[7];
@@ -572,7 +573,7 @@ int TestRtcpSenderReportAndRr() {
   RS_CHECK_EQ(static_cast<uint8_t>(buf[1]), static_cast<uint8_t>(1U));
   RS_CHECK_EQ(static_cast<uint8_t>(buf[4]), static_cast<uint8_t>(0x80U));  // V=2, RC=0.
   RS_CHECK_EQ(static_cast<uint8_t>(buf[5]), static_cast<uint8_t>(200U));   // SR.
-  const auto* sr = reinterpret_cast<const uint8_t*>(buf + kInterleavedHeaderBytes);
+  const auto* sr = static_cast<const uint8_t*>(static_cast<const void*>(buf + kInterleavedHeaderBytes));
   const uint32_t ntp_seconds = (static_cast<uint32_t>(sr[8]) << 24U) | (static_cast<uint32_t>(sr[9]) << 16U) |
                                (static_cast<uint32_t>(sr[10]) << 8U) | sr[11];
   const uint32_t sr_rtp_ts = (static_cast<uint32_t>(sr[16]) << 24U) | (static_cast<uint32_t>(sr[17]) << 16U) |
@@ -589,13 +590,15 @@ int TestRtcpSenderReportAndRr() {
                         0x55U, 0x66U, 0x77U, 0x88U,  // Source SSRC.
                         0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U,
                         0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U};
-  RS_CHECK(h.session.OnInterleaved(1U, osp::byte_span(reinterpret_cast<const std::byte*>(rr), sizeof(rr)), h.now));
+  RS_CHECK(h.session.OnInterleaved(
+      1U, osp::byte_span(static_cast<const std::byte*>(static_cast<const void*>(rr)), sizeof(rr)), h.now));
   RS_CHECK_EQ(h.session.Counters().rtcp_rr, 1U);
   RS_CHECK_EQ(h.session.Counters().rtcp_bad, 0U);
 
   // Malformed RTCP is counted, not fatal.
   const uint8_t bad[] = {0x81U, 201U, 0x00U, 0x7FU};
-  RS_CHECK(h.session.OnInterleaved(1U, osp::byte_span(reinterpret_cast<const std::byte*>(bad), sizeof(bad)), h.now));
+  RS_CHECK(h.session.OnInterleaved(
+      1U, osp::byte_span(static_cast<const std::byte*>(static_cast<const void*>(bad)), sizeof(bad)), h.now));
   RS_CHECK_EQ(h.session.Counters().rtcp_bad, 1U);
   return 0;
 }
@@ -718,10 +721,13 @@ int TestPeerLivenessIsolation() {
   rtcp_peer.now += near_timeout;
   const uint8_t malformed[] = {0x81U, 201U, 0x00U, 0x7FU};
   RS_CHECK(stale.session.OnInterleaved(
-      1U, osp::byte_span(reinterpret_cast<const std::byte*>(malformed), sizeof(malformed)), stale.now));
+      1U, osp::byte_span(static_cast<const std::byte*>(static_cast<const void*>(malformed)), sizeof(malformed)),
+      stale.now));
   const uint8_t receiver_report[] = {0x80U, 201U, 0x00U, 0x01U, 0x11U, 0x22U, 0x33U, 0x44U};
   RS_CHECK(rtcp_peer.session.OnInterleaved(
-      1U, osp::byte_span(reinterpret_cast<const std::byte*>(receiver_report), sizeof(receiver_report)), rtcp_peer.now));
+      1U,
+      osp::byte_span(static_cast<const std::byte*>(static_cast<const void*>(receiver_report)), sizeof(receiver_report)),
+      rtcp_peer.now));
   RS_CHECK_EQ(rtcp_peer.session.Counters().rtcp_rr, 1U);
   FrameDesc next_frame{};
   RS_CHECK(PushAu(stale, kIdrAu, sizeof(kIdrAu), kFrameIdr, 2000000ULL, next_frame));
@@ -1058,7 +1064,7 @@ int TestControlReserveAndPacketRetry() {
   RS_CHECK(before_response > kControlTxReserveBytes);
   RS_CHECK(before_response <= kMediaTxLimitBytes);
   std::vector<uint8_t> capture;
-  const auto* first_bytes = reinterpret_cast<const uint8_t*>(first.data());
+  const auto* first_bytes = static_cast<const uint8_t*>(static_cast<const void*>(first.data()));
   capture.insert(capture.end(), first_bytes, first_bytes + 7U);
   h.session.ConsumeTx(7U, h.now);
   Req options(Method::kOptions, "*");
@@ -1140,7 +1146,7 @@ int OpenUdpClient(uint16_t& port) {
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     addr.sin_port = htons(p);
-    if (::bind(s, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) == 0) {
+    if (::bind(s, static_cast<const sockaddr*>(static_cast<const void*>(&addr)), sizeof(addr)) == 0) {
       fd = s;
       chosen = p;
     } else {
@@ -1221,7 +1227,7 @@ int TestH265BadParamSets() {
   sp.sps_len = sizeof(kHevcSps);
   sp.pps = kHevcPps;
   sp.pps_len = sizeof(kHevcPps);
-  auto r = BuildSdp(sp, osp::writable_byte_span(reinterpret_cast<std::byte*>(body), sizeof(body)));
+  auto r = BuildSdp(sp, osp::writable_byte_span(static_cast<std::byte*>(static_cast<void*>(body)), sizeof(body)));
   RS_CHECK(r.has_value() == false);
   RS_CHECK_EQ(r.get_error(), SdpError::kBadParamSet);
   return 0;
@@ -1273,8 +1279,8 @@ uint16_t FreeTcpPort() {
   addr.sin_port = 0;
   socklen_t len = sizeof(addr);
   uint16_t port = 0U;
-  if (fd >= 0 && ::bind(fd, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) == 0 &&
-      ::getsockname(fd, reinterpret_cast<sockaddr*>(&addr), &len) == 0) {
+  if (fd >= 0 && ::bind(fd, static_cast<const sockaddr*>(static_cast<const void*>(&addr)), sizeof(addr)) == 0 &&
+      ::getsockname(fd, static_cast<sockaddr*>(static_cast<void*>(&addr)), &len) == 0) {
     port = ntohs(addr.sin_port);
   }
   if (fd >= 0) {

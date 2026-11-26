@@ -40,8 +40,8 @@ class RtcpEndpoint final {
   // Returns true when the peer sent BYE.
   [[nodiscard]] bool OnDatagram(osp::byte_span payload, uint32_t& rr_count, uint32_t& bye_count,
                                 uint32_t& bad_count) noexcept {
-    auto summary =
-        ParseCompound(reinterpret_cast<const uint8_t*>(payload.data()), static_cast<uint32_t>(payload.size()));
+    auto summary = ParseCompound(static_cast<const uint8_t*>(static_cast<const void*>(payload.data())),
+                                 static_cast<uint32_t>(payload.size()));
     if (summary.has_value() == false) {
       ++bad_count;
       return false;
@@ -72,8 +72,9 @@ class RtcpEndpoint final {
     uint8_t buf[kMaxRtcpBytes] = {};
     char cname[32] = {};
     std::snprintf(cname, sizeof(cname), "rs500@%s", (advertise_ip != nullptr) ? advertise_ip : "0.0.0.0");
-    auto built = BuildSenderReportWithSdes(osp::writable_byte_span(reinterpret_cast<std::byte*>(buf), sizeof(buf)),
-                                           ssrc, cname, wall_ns, rtp_ts, packet_count, octet_count_);
+    auto built = BuildSenderReportWithSdes(
+        osp::writable_byte_span(static_cast<std::byte*>(static_cast<void*>(buf)), sizeof(buf)), ssrc, cname, wall_ns,
+        rtp_ts, packet_count, octet_count_);
     if (built.has_value() == false) {
       ++bad_count;
       next_sr_ns_ = now_ns + kNsPerMs * kMsPerSec;
