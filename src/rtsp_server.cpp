@@ -93,11 +93,12 @@ constexpr uint32_t kMaxGen = 1U << 24U;
 constexpr uint32_t kSlotBits = 8U;
 constexpr uint32_t kSlotMask = (1U << kSlotBits) - 1U;
 
-uint64_t RandomSeed() noexcept {
+bool RandomSeed(uint64_t& out) noexcept {
 #if defined(__linux__)
   uint64_t v = 0U;
   if (::getrandom(&v, sizeof(v), 0) == static_cast<ssize_t>(sizeof(v))) {
-    return v;
+    out = v;
+    return true;
   }
 #endif
   std::FILE* f = std::fopen("/dev/urandom", "rb");
@@ -106,10 +107,11 @@ uint64_t RandomSeed() noexcept {
     const size_t n = std::fread(&v, 1, sizeof(v), f);
     std::fclose(f);
     if (n == sizeof(v)) {
-      return v;
+      out = v;
+      return true;
     }
   }
-  return osp::SteadyNowNs();
+  return false;
 }
 
 uint32_t HostIpv4(const osp::SocketAddress& addr) noexcept {
@@ -277,8 +279,8 @@ osp::expected<void, ServerError> RtspServer::Start(const ServerConfig& cfg) noex
   idr_hooks_.last_request_ns = 0U;
   params_ = TrackParams{};
   codec_ = Codec::kUnknown;
-  if (cfg_.id_seed == 0U) {
-    cfg_.id_seed = RandomSeed();
+  if (cfg_.id_seed == 0U && !RandomSeed(cfg_.id_seed)) {
+    return osp::expected<void, ServerError>::error(ServerError::kBackendFailed);
   }
   // RAII: every failure path below releases the listener exactly once; only
   // the fully started server dismisses the guard.
@@ -321,6 +323,8 @@ osp::expected<void, ServerError> RtspServer::Start(const ServerConfig& cfg) noex
   if (StartThreads() == false) {
     running_.store(false, std::memory_order_release);
     static_cast<void>(svc_hsm_.Dispatch(svc::kStartFail));
+    svc_hsm_.Restart();
+    ingress_.Resume();
     return osp::expected<void, ServerError>::error(ServerError::kBackendFailed);
   }
   static_cast<void>(svc_hsm_.Dispatch(svc::kThreadStarted));
@@ -337,6 +341,11 @@ void RtspServer::ReleaseStartHandles() noexcept {
 }
 
 bool RtspServer::StartThreads() noexcept {
+#if defined(RS_ENABLE_FAULT_INJECTION)
+  if (fault_start_threads_) {
+    return false;
+  }
+#endif
   osp::ThreadOptions options = cfg_.loop_thread;
   options.name = "rtsp-loop";
   return loop_thread_.Start(options, [this]() noexcept { LoopThreadMain(); });
@@ -564,7 +573,11 @@ void RtspServer::OnListenerReadable(uint64_t now) noexcept {
       continue;
     }
     ConfigureTcpSocket(sock);
-    static_cast<void>(sock.SetNonBlocking(true));
+    if (!sock.SetNonBlocking(true).has_value()) {
+      ++stats_.accept_failed;
+      sock.Close();
+      continue;
+    }
     static_cast<void>(sock.SetNoDelay(true));
 
     Connection& c = conn_[slot];
@@ -975,7 +988,8 @@ void RtspServer::OnTimer(uint32_t timer_id) noexcept {
   DrainIngress(start);
   RunMaintenance(osp::SteadyNowNs());
   stats_.au_dropped = source_dropped_.load(std::memory_order_relaxed);
-  stats_.source_stopped = source_error_.load(std::memory_order_relaxed) != 0U;
+  stats_.source_error = source_error_.load(std::memory_order_relaxed);
+  stats_.source_stopped = stats_.source_error != 0U;
   PublishStats();
   SampleLatency(start);
 }

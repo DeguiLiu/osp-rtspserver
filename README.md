@@ -135,10 +135,11 @@ custom stack sizes; x86 stack-frame reports do not establish ARM stack budgets.
 ### Debug shell
 
 Build with `-DRS_ENABLE_DEBUG_SHELL=ON`, then pass `--shell-port 5090` to the
-demo and connect over telnet. Read-only commands include `stats`, `clients`,
-`client <slot>`, `pool`, `fd`, `timers`, `stream`, `rtcp`, `latency`, `mem`,
-`config`. Admin commands are `log`, `kick`, `reset`, `trace`, `idr` and
-`shutdown`; `idr` requires a registered encoder hook.
+demo and connect over telnet. Read-only commands are `status` (full snapshot:
+version, time, config, memory, pool, fds, timers, source, counters, RTCP,
+latency, clients, TCP info) and `client <slot>` (one client). Admin commands
+are `log`, `kick`, `reset`, `trace`, `idr` and `shutdown`; `idr` requires a
+registered encoder hook.
 
 ## Documentation
 

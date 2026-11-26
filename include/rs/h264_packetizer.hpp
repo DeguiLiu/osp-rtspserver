@@ -31,6 +31,7 @@ enum class NalType : uint8_t {
 
 struct NalUnit {
   osp::byte_span data;  // NAL payload without the start code.
+  uint32_t offset = 0U;  // Payload offset in the access unit.
   uint8_t type = 0U;
 };
 
@@ -78,12 +79,17 @@ enum class PacketizeError : uint8_t {
 struct PacketizeCursor {
   uint32_t nal_offset = 0U;   // Offset of the current NAL start code in the AU.
   uint32_t frag_offset = 0U;  // Bytes of the current NAL already packetized.
+  uint32_t nal_start = 0U;    // Payload offset after the current start code.
+  uint32_t nal_len = 0U;      // Payload length, start code and trailing zeros excluded.
+  uint32_t nal_next = 0U;     // Offset of the next start code, or au_len.
   uint32_t au_len = 0U;
   uint16_t seq = 0U;
   uint32_t ts = 0U;
   bool await_idr = true;
   bool in_au = false;
   bool marker_sent = false;
+  bool nal_last = false;
+  bool nal_loaded = false;
   std::array<uint8_t, kRtpHeaderBytes> rtp_header{};
 };
 

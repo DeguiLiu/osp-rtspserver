@@ -25,6 +25,7 @@ constexpr uint32_t kClientRateBps = kClientEgressRateBps;  // Per-client shaper.
 constexpr uint32_t kClientBurstBytes = kClientEgressBurstBytes;
 constexpr uint32_t kMaxTransportHeader = 256U;
 constexpr uint32_t kMaxSdpBody = 4096U;
+constexpr uint32_t kNoCseq = 0xFFFFFFFFU;
 constexpr uint64_t kSessionTimeoutNs = static_cast<uint64_t>(kSessionTimeoutMs) * 1000000ULL;
 constexpr uint64_t kPlayIdrTimeoutNs = static_cast<uint64_t>(kPlayIdrTimeoutMs) * 1000000ULL;
 constexpr uint64_t kSendStallNs = static_cast<uint64_t>(kSendStallTimeoutMs) * 1000000ULL;
@@ -390,6 +391,8 @@ void RtspSession::Configure(FrameIngress& ingress, const TrackParams& params, co
   close_reason_ = kCloseNone;
   fault_eagain_ = 0U;
   fault_idr_ = 0U;
+  udp_batch_count_ = 0U;
+  udp_batch_ts_ = 0U;
   counters_ = SessionCounters{};
 }
 
@@ -397,6 +400,8 @@ void RtspSession::ResetMedia() noexcept {
   media_.Reset();
   media_enabled_ = false;
   awaiting_rtp_info_ = false;
+  udp_batch_count_ = 0U;
+  udp_batch_ts_ = 0U;
 }
 
 void RtspSession::Close(CloseReason reason, uint64_t now_ns) noexcept {
@@ -473,6 +478,7 @@ SessionSnapshot RtspSession::Snapshot(uint64_t now_ns) const noexcept {
   const MediaSender::Snapshot media = media_.GetSnapshot(now_ns);
   out.queue_depth = media.queue_depth;
   out.queue_bytes = media.queue_bytes;
+  out.tx_pending = tx_.Unflushed();
   out.oldest_age_ms = media.oldest_age_ms;
   out.fault_eagain = fault_eagain_;
   out.fault_idr = fault_idr_;
@@ -547,7 +553,7 @@ void RtspSession::BeginResponse(OutBuf& out, uint16_t status, uint32_t cseq) noe
   OutCh(out, ' ');
   OutStr(out, ReasonPhrase(status));
   OutStr(out, "\r\n");
-  if (cseq != 0U) {
+  if (cseq != kNoCseq) {
     OutStr(out, "CSeq: ");
     OutU32(out, cseq);
     OutStr(out, "\r\n");
@@ -724,7 +730,7 @@ uint16_t RtspSession::HandleRequest(const RtspRequest& req, uint64_t now_ns) noe
     return last_status_;
   }
   if (have_cseq == false) {
-    last_status_ = WriteStatus(StatusCode(RtspStatus::kBadRequest), 0U);
+    last_status_ = WriteStatus(StatusCode(RtspStatus::kBadRequest), kNoCseq);
     return last_status_;
   }
   last_peer_activity_ns_ = now_ns;
@@ -847,12 +853,22 @@ uint16_t RtspSession::HandleSetup(const RtspRequest& req, uint32_t cseq, uint64_
   if (SessionMatches(req, session_header) == false) {
     return WriteStatus(StatusCode(RtspStatus::kSessionNotFound), cseq);
   }
+  const TransportKind previous_transport = transport_;
+  const uint16_t previous_client_rtp = client_rtp_port_;
+  const uint16_t previous_client_rtcp = client_rtcp_port_;
+  const uint16_t previous_server_rtp = server_rtp_port_;
+  const uint16_t previous_server_rtcp = server_rtcp_port_;
   if (ParseTransport(req) == false) {
     return WriteStatus(StatusCode(RtspStatus::kUnsupportedTransport), cseq);
   }
 
   if (transport_ == TransportKind::kUdp) {
     if (client_ipv4_ == 0U) {
+      transport_ = previous_transport;
+      client_rtp_port_ = previous_client_rtp;
+      client_rtcp_port_ = previous_client_rtcp;
+      server_rtp_port_ = previous_server_rtp;
+      server_rtcp_port_ = previous_server_rtcp;
       return WriteStatus(StatusCode(RtspStatus::kServiceUnavailable), cseq);
     }
     // Transactional repeated SETUP: open the replacement pair first, then
@@ -860,10 +876,22 @@ uint16_t RtspSession::HandleSetup(const RtspRequest& req, uint32_t cseq, uint64_
     UdpRtpTransport fresh;
     uint16_t new_rtp_port = 0U;
     uint16_t new_rtcp_port = 0U;
-    if (fresh.Open(client_ipv4_, client_rtp_port_, client_rtcp_port_, new_rtp_port, new_rtcp_port) == false) {
+    bool opened = false;
+#if defined(RS_ENABLE_FAULT_INJECTION)
+    if (fault_setup_open_ == false) {
+      opened = fresh.Open(client_ipv4_, client_rtp_port_, client_rtcp_port_, new_rtp_port, new_rtcp_port);
+    }
+#else
+    opened = fresh.Open(client_ipv4_, client_rtp_port_, client_rtcp_port_, new_rtp_port, new_rtcp_port);
+#endif
+    if (opened == false) {
       hsm_ctx_.setup_ok = false;
       static_cast<void>(hsm_.Dispatch(sess::kSetupFail));
-      transport_ = TransportKind::kNone;
+      transport_ = previous_transport;
+      client_rtp_port_ = previous_client_rtp;
+      client_rtcp_port_ = previous_client_rtcp;
+      server_rtp_port_ = previous_server_rtp;
+      server_rtcp_port_ = previous_server_rtcp;
       return WriteStatus(StatusCode(RtspStatus::kServiceUnavailable), cseq);
     }
     udp_ = std::move(fresh);
@@ -1070,6 +1098,13 @@ void RtspSession::OnFrame(const FrameDesc& desc, uint64_t now_ns) noexcept {
   if (result == MediaSender::EnqueueResult::kQueueFull) {
     ++counters_.queue_drops;
     RequestIdr(now_ns);
+  } else if (result == MediaSender::EnqueueResult::kNoRef) {
+    // The pool refused the reference (generation or refcount failure). The AU
+    // is not queued, so the reference chain is broken: wait for a keyframe and
+    // count it with queue drops so the failure is visible.
+    media_.DropToAwaitIdr();
+    ++counters_.queue_drops;
+    RequestIdr(now_ns);
   }
   if (result == MediaSender::EnqueueResult::kEnqueued) {
     Pump(now_ns);
@@ -1134,20 +1169,59 @@ uint32_t RtspSession::CursorTs() const noexcept {
   return media_.CursorTs();
 }
 
+bool RtspSession::FlushUdpBatch(uint64_t now) noexcept {
+  if (udp_batch_count_ == 0U) {
+    return true;
+  }
+  RtpBatchEntry entries[kMaxUdpBatch];
+  for (uint32_t i = 0U; i < udp_batch_count_; ++i) {
+    const UdpBatchItem& item = udp_batch_[i];
+    entries[i].header = item.header.data();
+    entries[i].header_len = item.header_len;
+    entries[i].prefix = item.prefix.data();
+    entries[i].prefix_len = item.prefix_len;
+    entries[i].payload = item.payload;
+    entries[i].payload_len = item.payload_len;
+  }
+  const uint32_t count = udp_batch_count_;
+  const auto sent = udp_.SendBatch(entries, count);
+  const uint32_t n = sent.has_value() ? sent.value() : 0U;
+  for (uint32_t i = 0U; i < n; ++i) {
+    ++counters_.packets_sent;
+    rtcp_.OnRtpSent(entries[i].prefix_len + entries[i].payload_len, now, udp_batch_ts_);
+  }
+  if (n < count) {
+    counters_.udp_drops += count - n;
+  }
+  if (n > 0U) {
+    last_activity_ns_ = now;
+  }
+  udp_batch_count_ = 0U;
+  return n == count;
+}
+
 bool RtspSession::PumpMedia(uint64_t now) noexcept {
   if (params_ == nullptr) {
     return false;
   }
   const bool tcp = transport_ == TransportKind::kTcp;
+  auto finish = [&](bool ok) -> bool {
+    if (!tcp && !FlushUdpBatch(now)) {
+      DropToAwaitIdr(now);
+      return false;
+    }
+    return ok;
+  };
   uint32_t sent_bytes = 0U;
   for (uint32_t packets = 0U; packets < kMaxPacketsPerPump && sent_bytes < kPumpBudgetBytes; ++packets) {
     if (media_.HasCurrent() == false && media_.TakeNext(now, next_seq_, ssrc_) == false) {
-      return true;
+      return finish(true);
     }
     if (awaiting_rtp_info_ && WritePlayResponse(now) == false) {
-      return false;  // Buffer full: retry after a flush.
+      return finish(false);  // Buffer full: retry after a flush.
     }
     if (media_.Data() == nullptr) {
+      static_cast<void>(finish(false));
       media_.ReleaseCurrent();
       DropToAwaitIdr(now);
       return false;
@@ -1161,9 +1235,17 @@ bool RtspSession::PumpMedia(uint64_t now) noexcept {
     if (pkt.has_value() == false) {
       const PacketizeError err = pkt.get_error();
       if (err == PacketizeError::kEndOfAu) {
+        if (!tcp && !FlushUdpBatch(now)) {
+          media_.ReleaseCurrent();
+          DropToAwaitIdr(now);
+          return false;
+        }
         media_.ReleaseCurrent();
         ++counters_.frames_completed;
         continue;
+      }
+      if (!tcp) {
+        static_cast<void>(FlushUdpBatch(now));
       }
       DropToAwaitIdr(now);
       return false;
@@ -1172,6 +1254,9 @@ bool RtspSession::PumpMedia(uint64_t now) noexcept {
     const uint32_t wire_bytes = view.header_len + view.prefix_len + view.payload_len;
     if (media_.Admit(wire_bytes, now) == false) {
       media_.RestoreCursor(saved_cursor);
+      if (!tcp) {
+        static_cast<void>(FlushUdpBatch(now));
+      }
       // Shaping pauses the cursor and never discards the access unit: dropping
       // here forced AwaitIDR whenever an IDR exceeded the 32 KiB burst, which
       // throttled UDP to roughly one AU per second at 4 Mbit/s.
@@ -1191,25 +1276,40 @@ bool RtspSession::PumpMedia(uint64_t now) noexcept {
         DropToAwaitIdr(now);
         return false;
       }
+      ++counters_.packets_sent;
+      rtcp_.OnRtpSent(view.prefix_len + view.payload_len, now, CursorTs());
+      last_activity_ns_ = now;
     } else {
 #if defined(RS_ENABLE_FAULT_INJECTION)
       if (fault_eagain_ > 0U) {
+        static_cast<void>(FlushUdpBatch(now));
         --fault_eagain_;
         ++counters_.udp_drops;
         DropToAwaitIdr(now);
         return false;
       }
 #endif
-      auto sent = udp_.SendRtp(view);
-      if (sent.has_value() == false || sent.value() == SendStatus::kWouldBlock) {
-        ++counters_.udp_drops;
+      if (udp_batch_count_ == 0U) {
+        udp_batch_ts_ = CursorTs();
+      }
+      UdpBatchItem& item = udp_batch_[udp_batch_count_];
+      item.header_len = view.header_len;
+      item.prefix_len = view.prefix_len;
+      item.payload = view.payload;
+      item.payload_len = view.payload_len;
+      if (view.header_len != 0U) {
+        std::memcpy(item.header.data(), view.header, view.header_len);
+      }
+      if (view.prefix_len != 0U) {
+        std::memcpy(item.prefix.data(), view.prefix, view.prefix_len);
+      }
+      ++udp_batch_count_;
+      if (udp_batch_count_ == kMaxUdpBatch && FlushUdpBatch(now) == false) {
         DropToAwaitIdr(now);
         return false;
       }
     }
     next_seq_ = media_.CursorSeq();
-    ++counters_.packets_sent;
-    rtcp_.OnRtpSent(view.prefix_len + view.payload_len, now, CursorTs());
     sent_bytes += wire_bytes;
     // Packet trace: opt-in per session ("trace <slot> on") and rate-limited to
     // 10 lines/s, so the loop thread never becomes a logging hot path.
@@ -1224,9 +1324,8 @@ bool RtspSession::PumpMedia(uint64_t now) noexcept {
                          view.marker ? 1 : 0, (transport_ == TransportKind::kTcp) ? "tcp" : "udp");
       trace_last_ns_ = now;
     }
-    last_activity_ns_ = now;  // Successful media output counts as activity.
   }
-  return true;
+  return finish(true);
 }
 
 bool RtspSession::OnTick(uint64_t now_ns) noexcept {

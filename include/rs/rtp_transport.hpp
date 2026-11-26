@@ -16,6 +16,16 @@ enum class TransportError : uint8_t { kNotConfigured = 0, kTooLarge, kFatal, kWo
 
 enum class SendStatus : uint8_t { kSent = 0, kWouldBlock };
 
+// One datagram view for a batched UDP send.
+struct RtpBatchEntry {
+  const uint8_t* header = nullptr;
+  uint32_t header_len = 0U;
+  const uint8_t* prefix = nullptr;
+  uint32_t prefix_len = 0U;
+  const uint8_t* payload = nullptr;
+  uint32_t payload_len = 0U;
+};
+
 // One UDP socket pair per playing session (RTP + RTCP), bound to ephemeral
 // local ports and connected to the client's advertised ports.
 class UdpRtpTransport {
@@ -36,6 +46,10 @@ class UdpRtpTransport {
   bool IsOpen() const noexcept { return rtp_.Fd() >= 0; }
 
   [[nodiscard]] osp::expected<SendStatus, TransportError> SendRtp(const RtpPacket& pkt) noexcept;
+  // Sends up to kMaxUdpBatch datagrams; returns the count accepted by the
+  // kernel. A short count means the tail was not sent.
+  [[nodiscard]] osp::expected<uint32_t, TransportError> SendBatch(const RtpBatchEntry* entries,
+                                                                  uint32_t count) noexcept;
   [[nodiscard]] osp::expected<SendStatus, TransportError> SendRtcp(const uint8_t* data, uint32_t len) noexcept;
   [[nodiscard]] int32_t RtcpFd() const noexcept { return static_cast<int32_t>(rtcp_.Fd()); }
   [[nodiscard]] osp::expected<uint32_t, TransportError> RecvRtcp(uint8_t* data, uint32_t cap) noexcept;

@@ -1,3 +1,7 @@
+#if defined(__linux__) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE
+#endif
+
 // RTP egress: connected UDP socket pair, TCP interleaved framing, token bucket.
 // Thread ownership: loop thread only; no session state is kept here.
 // SPDX-License-Identifier: MIT
@@ -198,6 +202,106 @@ osp::expected<SendStatus, TransportError> UdpRtpTransport::SendRtp(const RtpPack
     default:
       return osp::expected<SendStatus, TransportError>::error(TransportError::kFatal);
   }
+}
+
+osp::expected<uint32_t, TransportError> UdpRtpTransport::SendBatch(const RtpBatchEntry* entries,
+                                                                   uint32_t count) noexcept {
+  if (!IsOpen()) {
+    return osp::expected<uint32_t, TransportError>::error(TransportError::kNotConfigured);
+  }
+  if (entries == nullptr || count == 0U) {
+    return osp::expected<uint32_t, TransportError>::error(TransportError::kFatal);
+  }
+  if (count > kMaxUdpBatch) {
+    return osp::expected<uint32_t, TransportError>::error(TransportError::kTooLarge);
+  }
+
+  uint32_t totals[kMaxUdpBatch] = {};
+  for (uint32_t i = 0U; i < count; ++i) {
+    const RtpBatchEntry& e = entries[i];
+    totals[i] = e.header_len + e.prefix_len + e.payload_len;
+    if (totals[i] == 0U || totals[i] > kMaxInterleavedFrameBytes) {
+      return osp::expected<uint32_t, TransportError>::error(TransportError::kTooLarge);
+    }
+    if ((e.header_len != 0U && e.header == nullptr) || (e.prefix_len != 0U && e.prefix == nullptr) ||
+        (e.payload_len != 0U && e.payload == nullptr)) {
+      return osp::expected<uint32_t, TransportError>::error(TransportError::kFatal);
+    }
+  }
+
+#if defined(__linux__)
+  struct mmsghdr msgs[kMaxUdpBatch] = {};
+  struct iovec iovs[kMaxUdpBatch][3] = {};
+  for (uint32_t i = 0U; i < count; ++i) {
+    const RtpBatchEntry& e = entries[i];
+    uint32_t n = 0U;
+    if (e.header_len != 0U) {
+      iovs[i][n].iov_base = const_cast<uint8_t*>(e.header);
+      iovs[i][n].iov_len = e.header_len;
+      ++n;
+    }
+    if (e.prefix_len != 0U) {
+      iovs[i][n].iov_base = const_cast<uint8_t*>(e.prefix);
+      iovs[i][n].iov_len = e.prefix_len;
+      ++n;
+    }
+    if (e.payload_len != 0U) {
+      iovs[i][n].iov_base = const_cast<uint8_t*>(e.payload);
+      iovs[i][n].iov_len = e.payload_len;
+      ++n;
+    }
+    msgs[i].msg_hdr.msg_iov = iovs[i];
+    msgs[i].msg_hdr.msg_iovlen = n;
+  }
+  for (uint32_t attempt = 0U; attempt < kSendRetryLimit; ++attempt) {
+    const int32_t sent = ::sendmmsg(rtp_.Fd(), msgs, count, 0);
+    if (sent >= 0) {
+      return osp::expected<uint32_t, TransportError>::success(static_cast<uint32_t>(sent));
+    }
+    if (errno == EINTR) {
+      continue;
+    }
+    if (errno == EAGAIN || errno == EWOULDBLOCK || errno == ENOBUFS || errno == ENOMEM) {
+      return osp::expected<uint32_t, TransportError>::error(TransportError::kWouldBlock);
+    }
+    return osp::expected<uint32_t, TransportError>::error(TransportError::kFatal);
+  }
+  return osp::expected<uint32_t, TransportError>::error(TransportError::kWouldBlock);
+#else
+  uint32_t sent = 0U;
+  for (uint32_t i = 0U; i < count; ++i) {
+    const RtpBatchEntry& e = entries[i];
+    struct iovec iov[3] = {};
+    uint32_t n = 0U;
+    if (e.header_len != 0U) {
+      iov[n].iov_base = const_cast<uint8_t*>(e.header);
+      iov[n].iov_len = e.header_len;
+      ++n;
+    }
+    if (e.prefix_len != 0U) {
+      iov[n].iov_base = const_cast<uint8_t*>(e.prefix);
+      iov[n].iov_len = e.prefix_len;
+      ++n;
+    }
+    if (e.payload_len != 0U) {
+      iov[n].iov_base = const_cast<uint8_t*>(e.payload);
+      iov[n].iov_len = e.payload_len;
+      ++n;
+    }
+    const IoResult result = SendIovecs(rtp_.Fd(), iov, n, totals[i]);
+    if (result == IoResult::kSent) {
+      ++sent;
+      continue;
+    }
+    if (result == IoResult::kWouldBlock) {
+      return (sent > 0U) ? osp::expected<uint32_t, TransportError>::success(sent)
+                         : osp::expected<uint32_t, TransportError>::error(TransportError::kWouldBlock);
+    }
+    return (sent > 0U) ? osp::expected<uint32_t, TransportError>::success(sent)
+                       : osp::expected<uint32_t, TransportError>::error(TransportError::kFatal);
+  }
+  return osp::expected<uint32_t, TransportError>::success(sent);
+#endif
 }
 
 osp::expected<SendStatus, TransportError> UdpRtpTransport::SendRtcp(const uint8_t* data, uint32_t len) noexcept {

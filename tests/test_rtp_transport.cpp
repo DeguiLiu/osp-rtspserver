@@ -315,6 +315,66 @@ int TestUdpLoopback() {
   return 0;
 }
 
+int TestUdpBatch() {
+  const int fd = ::socket(AF_INET, SOCK_DGRAM, 0);
+  RS_CHECK(fd >= 0);
+  struct sockaddr_in local{};
+  local.sin_family = AF_INET;
+  local.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  local.sin_port = 0;
+  RS_CHECK_EQ(::bind(fd, reinterpret_cast<const struct sockaddr*>(&local), sizeof(local)), 0);
+  socklen_t local_len = static_cast<socklen_t>(sizeof(local));
+  RS_CHECK_EQ(::getsockname(fd, reinterpret_cast<struct sockaddr*>(&local), &local_len), 0);
+  struct timeval timeout{};
+  timeout.tv_sec = 2;
+  RS_CHECK_EQ(::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)), 0);
+  const uint16_t rx_port = ntohs(local.sin_port);
+
+  UdpRtpTransport transport;
+  uint16_t local_rtp = 0U;
+  uint16_t local_rtcp = 0U;
+  RS_CHECK(transport.Open(0x0100007FU, rx_port, rx_port, local_rtp, local_rtcp));
+
+  uint8_t header[12] = {};
+  for (uint32_t i = 0U; i < sizeof(header); ++i) {
+    header[i] = static_cast<uint8_t>(0x80U + i);
+  }
+  const uint8_t prefix[2] = {0x7CU, 0x85U};
+  const uint8_t p0[3] = {0x01U, 0x02U, 0x03U};
+  const uint8_t p1[2] = {0x11U, 0x12U};
+  const uint8_t p2[4] = {0x21U, 0x22U, 0x23U, 0x24U};
+  const rs::RtpBatchEntry entries[3] = {
+      {header, sizeof(header), nullptr, 0U, p0, sizeof(p0)},
+      {header, sizeof(header), prefix, sizeof(prefix), p1, sizeof(p1)},
+      {header, sizeof(header), prefix, sizeof(prefix), p2, sizeof(p2)},
+  };
+  auto sent = transport.SendBatch(entries, 3U);
+  RS_CHECK(sent.has_value());
+  RS_CHECK_EQ(sent.value(), 3U);
+
+  uint8_t rx_buf[2048] = {};
+  const uint8_t* expected_payloads[3] = {p0, p1, p2};
+  const uint32_t expected_lens[3] = {sizeof(p0), sizeof(p1), sizeof(p2)};
+  for (uint32_t i = 0U; i < 3U; ++i) {
+    const ssize_t rx_len = ::recv(fd, rx_buf, sizeof(rx_buf), 0);
+    const uint32_t prefix_len = (i == 0U) ? 0U : sizeof(prefix);
+    RS_CHECK_EQ(rx_len, static_cast<ssize_t>(sizeof(header) + prefix_len + expected_lens[i]));
+    RS_CHECK_EQ(std::memcmp(rx_buf, header, sizeof(header)), 0);
+    if (prefix_len != 0U) {
+      RS_CHECK_EQ(std::memcmp(rx_buf + sizeof(header), prefix, prefix_len), 0);
+    }
+    RS_CHECK_EQ(std::memcmp(rx_buf + sizeof(header) + prefix_len, expected_payloads[i], expected_lens[i]), 0);
+  }
+
+  const rs::RtpBatchEntry too_many{header, sizeof(header), nullptr, 0U, p0, sizeof(p0)};
+  auto bad = transport.SendBatch(&too_many, rs::kMaxUdpBatch + 1U);
+  RS_CHECK(!bad.has_value());
+  RS_CHECK(bad.get_error() == TransportError::kTooLarge);
+  transport.Close();
+  ::close(fd);
+  return 0;
+}
+
 }  // namespace
 
 int main() {
@@ -334,6 +394,9 @@ int main() {
     return 1;
   }
   if (TestUdpLoopback() != 0) {
+    return 1;
+  }
+  if (TestUdpBatch() != 0) {
     return 1;
   }
   std::printf("test_rtp_transport: all checks passed\n");

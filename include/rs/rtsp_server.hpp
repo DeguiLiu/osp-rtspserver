@@ -85,6 +85,7 @@ struct ServerStats {
   uint64_t loop_samples = 0U;
   bool loop_failed = false;
   bool source_stopped = false;
+  uint32_t source_error = 0U;
 };
 
 // Read-only client row for the debug shell. Filled on the loop thread and
@@ -195,6 +196,8 @@ class RtspServer final : public osp::EventLoop<RtspServer, kMaxPollEvents, 8U> {
   // ingress, then call Wake(); the loop owns all sessions and sockets.
   [[nodiscard]] FrameIngress& Ingress() noexcept { return ingress_; }
   void RequestStop() noexcept;
+  // Test hook: make the next Start() fail after the listener is open.
+  void SetFaultStartThreadsFail(bool fail) noexcept { fault_start_threads_ = fail; }
   // Set the log level for this server AND for the newosp logging backend, so
   // that library-internal messages and server messages share one threshold.
   void SetLogLevel(osp::log::Level level) noexcept {
@@ -343,6 +346,7 @@ class RtspServer final : public osp::EventLoop<RtspServer, kMaxPollEvents, 8U> {
   uint32_t maint_timer_ = 0U;
   uint64_t accept_retry_ns_ = 0U;
   bool listener_armed_ = false;
+  bool fault_start_threads_ = false;
   uint8_t rx_[kRtspRxBytes] = {};
 
   // 32-bit lock-free producer status counters (callbacks from FileSource).

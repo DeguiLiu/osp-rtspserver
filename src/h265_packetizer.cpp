@@ -49,10 +49,9 @@ bool OnlyZeros(const uint8_t* au, uint32_t from, uint32_t len) noexcept {
   return zeros;
 }
 
-bool HasNextNal(const uint8_t* au, uint32_t au_len, uint32_t offset) noexcept {
-  NalUnit next;
-  uint32_t probe = offset;
-  return (offset < au_len) && NextHevcNalUnit(au, au_len, probe, next);
+bool HasStartCode(const uint8_t* au, uint32_t au_len, uint32_t offset) noexcept {
+  uint32_t pos = 0U;
+  return (offset < au_len) && FindStartCode(au, offset, au_len, pos);
 }
 
 void WriteRtpHeader(HevcCursor& cursor, uint32_t ssrc, bool marker) noexcept {
@@ -73,14 +72,16 @@ void WriteRtpHeader(HevcCursor& cursor, uint32_t ssrc, bool marker) noexcept {
 
 // Validates the two-byte NAL header and returns the 6-bit nal_unit_type.
 // Reserved types above 40 (41..47) and AP (48) are rejected.
-bool ParseNalHeader(const uint8_t* data, uint32_t len, uint8_t& type) noexcept {
+bool ParseNalHeader(osp::byte_span data, uint8_t& type) noexcept {
   bool valid = false;
-  if ((nullptr != data) && (len >= kHevcNalHeaderBytes)) {
+  if (data.size() >= kHevcNalHeaderBytes) {
+    const uint8_t b0 = static_cast<uint8_t>(data[0]);
+    const uint8_t b1 = static_cast<uint8_t>(data[1]);
     const uint8_t layer_id =
-        static_cast<uint8_t>(((data[0] & kHevcLayerHighMask) << kHevcLayerHighShift) | (data[1] >> kHevcLayerLowShift));
-    const uint8_t tid_plus1 = static_cast<uint8_t>(data[1] & kHevcTidMask);
-    type = static_cast<uint8_t>((data[0] >> kHevcTypeShift) & kHevcTypeMask);
-    valid = (0U == (data[0] & kHevcForbiddenMask)) && (0U != tid_plus1) && (0U == layer_id) && (type <= kMaxNalType);
+        static_cast<uint8_t>(((b0 & kHevcLayerHighMask) << kHevcLayerHighShift) | (b1 >> kHevcLayerLowShift));
+    const uint8_t tid_plus1 = static_cast<uint8_t>(b1 & kHevcTidMask);
+    type = static_cast<uint8_t>((b0 >> kHevcTypeShift) & kHevcTypeMask);
+    valid = (0U == (b0 & kHevcForbiddenMask)) && (0U != tid_plus1) && (0U == layer_id) && (type <= kMaxNalType);
   }
   return valid;
 }
@@ -119,27 +120,27 @@ osp::expected<RtpPacket, PacketizeError> EmitParamSet(const HevcParamSets& param
   return result;
 }
 
-osp::expected<RtpPacket, PacketizeError> EmitSingle(const uint8_t* au, uint32_t next_offset, const NalUnit& nal,
-                                                    HevcCursor& cursor, uint32_t ssrc) noexcept {
-  const bool last = HasNextNal(au, cursor.au_len, next_offset) == false;
+osp::expected<RtpPacket, PacketizeError> EmitSingle(const uint8_t* au, uint32_t next_offset, uint32_t nal_start,
+                                                    uint32_t nal_len, bool last, HevcCursor& cursor,
+                                                    uint32_t ssrc) noexcept {
   cursor.nal_offset = next_offset;
   cursor.frag_offset = 0U;
+  cursor.nal_loaded = false;
   if (last) {
     cursor.in_au = false;
     cursor.marker_sent = true;
   }
-  return MakePacket(cursor, ssrc, static_cast<const uint8_t*>(static_cast<const void*>(nal.data.data())),
-                    static_cast<uint32_t>(nal.data.size()), last);
+  return MakePacket(cursor, ssrc, au + nal_start, nal_len, last);
 }
 
 // FU packet: two-byte payload header carrying the original NAL header layout
 // (type replaced by 49) plus a one-byte FU header with S/E/FuType. Only those
 // three bytes are staged in the cursor; fragment bytes stay in the shared AU.
-osp::expected<RtpPacket, PacketizeError> EmitFu(const uint8_t* au, uint32_t next_offset, const NalUnit& nal,
-                                                uint8_t type, HevcCursor& cursor, uint32_t ssrc) noexcept {
+osp::expected<RtpPacket, PacketizeError> EmitFu(const uint8_t* au, uint32_t next_offset, uint32_t nal_start,
+                                                uint32_t nal_len, uint8_t type, bool last_nal, HevcCursor& cursor,
+                                                uint32_t ssrc) noexcept {
   osp::expected<RtpPacket, PacketizeError> result =
       osp::expected<RtpPacket, PacketizeError>::error(PacketizeError::kBadNal);
-  const uint32_t nal_len = static_cast<uint32_t>(nal.data.size());
   const uint32_t start = (0U == cursor.frag_offset) ? kHevcNalHeaderBytes : cursor.frag_offset;
   if (start < nal_len) {
     const bool first = (0U == cursor.frag_offset);
@@ -149,25 +150,26 @@ osp::expected<RtpPacket, PacketizeError> EmitFu(const uint8_t* au, uint32_t next
     }
     const uint32_t frag_end = start + chunk;
     const bool last_fragment = (frag_end >= nal_len);
-    cursor.fu_header[0] = static_cast<uint8_t>((static_cast<uint8_t>(nal.data[0]) & kHevcFuKeepMask) |
+    cursor.fu_header[0] = static_cast<uint8_t>((au[nal_start] & kHevcFuKeepMask) |
                                                static_cast<uint8_t>(kFuType << kHevcTypeShift));
-    cursor.fu_header[1] = static_cast<uint8_t>(nal.data[1]);
+    cursor.fu_header[1] = au[nal_start + 1U];
     cursor.fu_header[2] =
         static_cast<uint8_t>((first ? kFuStartMask : 0x00U) | (last_fragment ? kFuEndMask : 0x00U) | type);
-    const bool last = last_fragment && HasNextNal(au, cursor.au_len, next_offset) == false;
+    const bool last = last_fragment && last_nal;
     WriteRtpHeader(cursor, ssrc, last);
     RtpPacket packet;
     packet.header = cursor.rtp_header.data();
     packet.header_len = kRtpHeaderBytes;
     packet.prefix = cursor.fu_header.data();
     packet.prefix_len = kFuHeaderBytes;
-    packet.payload = static_cast<const uint8_t*>(static_cast<const void*>(nal.data.data() + start));
+    packet.payload = au + nal_start + start;
     packet.payload_len = chunk;
     packet.marker = last;
     result = osp::expected<RtpPacket, PacketizeError>::success(packet);
     if (last_fragment) {
       cursor.nal_offset = next_offset;
       cursor.frag_offset = 0U;
+      cursor.nal_loaded = false;
     } else {
       cursor.frag_offset = frag_end;
     }
@@ -182,23 +184,32 @@ osp::expected<RtpPacket, PacketizeError> EmitFu(const uint8_t* au, uint32_t next
 }
 
 osp::expected<RtpPacket, PacketizeError> EmitNal(const uint8_t* au, HevcCursor& cursor, uint32_t ssrc) noexcept {
-  uint32_t next_offset = cursor.nal_offset;
-  NalUnit nal;
-  const bool have_nal = NextHevcNalUnit(au, cursor.au_len, next_offset, nal);
-  uint8_t type = 0U;
   osp::expected<RtpPacket, PacketizeError> result =
       osp::expected<RtpPacket, PacketizeError>::error(PacketizeError::kBadNal);
-  if (have_nal == false) {
-    cursor.in_au = false;
-    result = osp::expected<RtpPacket, PacketizeError>::error(
-        OnlyZeros(au, cursor.nal_offset, cursor.au_len) ? PacketizeError::kEndOfAu : PacketizeError::kBadNal);
-  } else if (ParseNalHeader(static_cast<const uint8_t*>(static_cast<const void*>(nal.data.data())),
-                            static_cast<uint32_t>(nal.data.size()), type) == false) {
-    cursor.in_au = false;
-  } else if ((0U == cursor.frag_offset) && (nal.data.size() <= kRtpPayloadMax)) {
-    result = EmitSingle(au, next_offset, nal, cursor, ssrc);
-  } else {
-    result = EmitFu(au, next_offset, nal, type, cursor, ssrc);
+  if (!cursor.nal_loaded) {
+    uint32_t next_offset = cursor.nal_offset;
+    NalUnit nal;
+    const bool have_nal = NextHevcNalUnit(au, cursor.au_len, next_offset, nal);
+    uint8_t type = 0U;
+    if (have_nal == false) {
+      cursor.in_au = false;
+      result = osp::expected<RtpPacket, PacketizeError>::error(
+          OnlyZeros(au, cursor.nal_offset, cursor.au_len) ? PacketizeError::kEndOfAu : PacketizeError::kBadNal);
+    } else if (ParseNalHeader(nal.data, type) == false) {
+      cursor.in_au = false;
+    } else {
+      cursor.nal_start = nal.offset;
+      cursor.nal_len = static_cast<uint32_t>(nal.data.size());
+      cursor.nal_next = next_offset;
+      cursor.nal_last = !HasStartCode(au, cursor.au_len, next_offset);
+      cursor.nal_loaded = true;
+    }
+  }
+  if (cursor.nal_loaded && (0U == cursor.frag_offset) && (cursor.nal_len <= kRtpPayloadMax)) {
+    result = EmitSingle(au, cursor.nal_next, cursor.nal_start, cursor.nal_len, cursor.nal_last, cursor, ssrc);
+  } else if (cursor.nal_loaded) {
+    const uint8_t type = static_cast<uint8_t>((au[cursor.nal_start] >> kHevcTypeShift) & kHevcTypeMask);
+    result = EmitFu(au, cursor.nal_next, cursor.nal_start, cursor.nal_len, type, cursor.nal_last, cursor, ssrc);
   }
   return result;
 }
@@ -222,10 +233,12 @@ bool NextHevcNalUnit(const uint8_t* au, uint32_t au_len, uint32_t& offset, NalUn
   if (ok) {
     out.data =
         osp::byte_span(static_cast<const std::byte*>(static_cast<const void*>(au + nal_start)), nal_end - nal_start);
+    out.offset = nal_start;
     out.type = static_cast<uint8_t>((au[nal_start] >> kHevcTypeShift) & kHevcTypeMask);
     offset = has_next ? next : au_len;
   } else {
     out.data = osp::byte_span();
+    out.offset = 0U;
     out.type = 0U;
     offset = au_len;
   }
@@ -245,21 +258,31 @@ bool HevcAuHasIrap(const uint8_t* au, uint32_t au_len) noexcept {
 void H265Packetizer::ResetCursor(HevcCursor& cursor) noexcept {
   cursor.nal_offset = 0U;
   cursor.frag_offset = 0U;
+  cursor.nal_start = 0U;
+  cursor.nal_len = 0U;
+  cursor.nal_next = 0U;
   cursor.au_len = 0U;
   cursor.param_stage = kParamStageDone;
   cursor.await_idr = true;
   cursor.in_au = false;
   cursor.marker_sent = false;
+  cursor.nal_last = false;
+  cursor.nal_loaded = false;
 }
 
 void H265Packetizer::StartAu(HevcCursor& cursor, uint32_t au_len, uint32_t ts, bool inject_params) noexcept {
   cursor.nal_offset = 0U;
   cursor.frag_offset = 0U;
+  cursor.nal_start = 0U;
+  cursor.nal_len = 0U;
+  cursor.nal_next = 0U;
   cursor.au_len = au_len;
   cursor.ts = ts;
   cursor.param_stage = inject_params ? 0U : kParamStageDone;
   cursor.in_au = true;
   cursor.marker_sent = false;
+  cursor.nal_last = false;
+  cursor.nal_loaded = false;
 }
 
 osp::expected<RtpPacket, PacketizeError> H265Packetizer::Next(const uint8_t* au, uint32_t au_len,

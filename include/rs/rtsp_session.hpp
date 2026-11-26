@@ -28,6 +28,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <atomic>
 #include <variant>
 
@@ -140,6 +141,7 @@ struct SessionSnapshot {
   bool trace_enabled = false;
   uint32_t queue_depth = 0U;
   uint32_t queue_bytes = 0U;
+  uint32_t tx_pending = 0U;
   uint32_t oldest_age_ms = 0U;
   uint32_t fault_eagain = 0U;
   uint32_t fault_idr = 0U;
@@ -212,6 +214,7 @@ class RtspSession {
   void ResetCounters() noexcept { counters_ = SessionCounters{}; }
   void SetFaultEagain(uint32_t count) noexcept { fault_eagain_ = count; }
   void SetFaultIdr(uint32_t count) noexcept { fault_idr_ = count; }
+  void SetFaultSetupOpenFail(bool fail) noexcept { fault_setup_open_ = fail; }
   void SetSlowBps(uint32_t bps, uint64_t now_ns) noexcept;
 
   [[nodiscard]] bool Closed() const noexcept { return closed_; }
@@ -269,6 +272,7 @@ class RtspSession {
 
   [[nodiscard]] bool TakeNextFrame(uint64_t now) noexcept;
   [[nodiscard]] bool PumpMedia(uint64_t now) noexcept;
+  [[nodiscard]] bool FlushUdpBatch(uint64_t now) noexcept;
   [[nodiscard]] bool WritePlayResponse(uint64_t now) noexcept;
   [[nodiscard]] bool Admit(uint32_t bytes, uint64_t now) noexcept;
   [[nodiscard]] uint32_t RtpTs(uint64_t pts_ns) const noexcept;
@@ -317,6 +321,18 @@ class RtspSession {
   uint64_t trace_last_ns_ = 0U;
   uint32_t fault_eagain_ = 0U;
   uint32_t fault_idr_ = 0U;
+  bool fault_setup_open_ = false;
+  struct UdpBatchItem {
+    std::array<uint8_t, kRtpHeaderBytes> header{};
+    std::array<uint8_t, 3U> prefix{};
+    uint32_t header_len = 0U;
+    uint32_t prefix_len = 0U;
+    const uint8_t* payload = nullptr;
+    uint32_t payload_len = 0U;
+  };
+  UdpBatchItem udp_batch_[kMaxUdpBatch];
+  uint32_t udp_batch_count_ = 0U;
+  uint32_t udp_batch_ts_ = 0U;
   SessionCounters counters_;
 };
 

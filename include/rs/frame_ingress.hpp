@@ -86,6 +86,8 @@ class FrameIngress {
   [[nodiscard]] bool ConsumeFaultDrop() noexcept;
 
   void Stop() noexcept { stopped_.store(true, std::memory_order_release); }
+  // Only safe when no producer holds a writer; used to retry a failed Start().
+  void Resume() noexcept { stopped_.store(false, std::memory_order_release); }
   [[nodiscard]] bool Stopped() const noexcept { return stopped_.load(std::memory_order_acquire); }
 
  private:

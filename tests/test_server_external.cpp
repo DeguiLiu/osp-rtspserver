@@ -140,9 +140,42 @@ int32_t RunCase(rs::Codec codec, uint16_t port) {
   return 0;
 }
 
+#if defined(RS_ENABLE_FAULT_INJECTION)
+int32_t RunStartRetry() {
+  uint8_t sps[4] = {0x67, 0x42, 0xC0, 0x1F};
+  uint8_t pps[4] = {0x68, 0xCE, 0x3C, 0x80};
+  rs::TrackParams params;
+  params.codec = rs::Codec::kH264;
+  params.sps = sps;
+  params.sps_len = sizeof(sps);
+  params.pps = pps;
+  params.pps_len = sizeof(pps);
+
+  rs::ServerConfig cfg;
+  cfg.port = 18581U;
+  cfg.params = params;
+  cfg.advertise_ip = "127.0.0.1";
+  cfg.max_clients = 1U;
+
+  rs::RtspServer server;
+  server.SetFaultStartThreadsFail(true);
+  RS_CHECK(!server.Start(cfg).has_value());
+  RS_CHECK(!server.Running());
+  server.SetFaultStartThreadsFail(false);
+  RS_CHECK(server.Start(cfg).has_value());
+  RS_CHECK(server.Running());
+  server.Stop();
+  RS_CHECK(!server.Running());
+  return 0;
+}
+#endif
+
 }  // namespace
 
 int main() {
+#if defined(RS_ENABLE_FAULT_INJECTION)
+  RS_CHECK_EQ(RunStartRetry(), 0);
+#endif
   RS_CHECK_EQ(RunCase(rs::Codec::kH264, 18579U), 0);
   g_idr_calls.store(0U, std::memory_order_relaxed);
   RS_CHECK_EQ(RunCase(rs::Codec::kH265, 18580U), 0);

@@ -123,9 +123,9 @@ server.UpdateTrackParams(new_params);
 ### 调试 shell
 
 以 `-DRS_ENABLE_DEBUG_SHELL=ON` 构建，给 demo 传 `--shell-port 5090`，然后用 telnet 连接。
-只读命令包括 `stats`、`clients`、`client <slot>`、`pool`、`fd`、`timers`、`stream`、
-`rtcp`、`latency`、`mem`、`config`；受控命令为 `log`、`kick`、`reset`、`trace`、`idr`、
-`shutdown`，其中 `idr` 需要先注册编码器回调。
+只读命令为 `status`（一次打印版本、时间、配置、内存、帧池、fd、定时器、源状态、计数器、
+RTCP、延迟、客户端表和 TCP 信息）与 `client <slot>`（单客户端详情）；受控命令为 `log`、
+`kick`、`reset`、`trace`、`idr`、`shutdown`，其中 `idr` 需要先注册编码器回调。
 
 ## 文档
 

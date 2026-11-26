@@ -259,6 +259,15 @@ int TestOptions() {
   return 0;
 }
 
+int TestCseqZero() {
+  Harness h;
+  Req opt(Method::kOptions, "*");
+  opt.H("CSeq", "0");
+  RS_CHECK_EQ(h.Do(opt), 200U);
+  RS_CHECK(HasText(h, "CSeq: 0"));
+  return 0;
+}
+
 int TestDescribe() {
   Harness h;
   const bool sdp_ready = SdpReady(h.params);
@@ -347,6 +356,53 @@ int TestSetupUdp() {
   bad.H("Transport", "RTP/AVP;unicast;client_port=5001-5002");
   RS_CHECK_EQ(odd.Do(bad), 461U);
   return 0;
+}
+
+int TestRepeatedSetupFailureKeepsTransport() {
+#if !defined(RS_ENABLE_FAULT_INJECTION)
+  std::printf("test_rtsp_session: NOTE fault injection off, repeated SETUP failure check skipped\n");
+  return 0;
+#else
+  if (!UdpReady()) {
+    std::printf("test_rtsp_session: NOTE udp transport is a stub, repeated SETUP check skipped\n");
+    return 0;
+  }
+  Harness h;
+  Req setup(Method::kSetup, "/live/trackID=0");
+  setup.H("CSeq", "70");
+  setup.H("Transport", "RTP/AVP;unicast;client_port=5000-5001");
+  RS_CHECK_EQ(h.Do(setup), 200U);
+  h.Drain();
+  const SessionSnapshot before = h.session.Snapshot(h.now);
+  RS_CHECK(h.session.Transport() == TransportKind::kUdp);
+  RS_CHECK(h.session.RtcpFd() >= 0);
+
+  char id[20] = {};
+  std::strncpy(id, h.session.SessionId(), sizeof(id) - 1U);
+  h.session.SetFaultSetupOpenFail(true);
+  Req again(Method::kSetup, "/live/trackID=0");
+  again.H("CSeq", "71");
+  again.H("Session", id);
+  again.H("Transport", "RTP/AVP;unicast;client_port=6000-6001");
+  RS_CHECK_EQ(h.Do(again), 503U);
+  const SessionSnapshot after = h.session.Snapshot(h.now);
+  RS_CHECK(h.session.Transport() == TransportKind::kUdp);
+  RS_CHECK_EQ(after.client_rtp_port, before.client_rtp_port);
+  RS_CHECK_EQ(after.client_rtcp_port, before.client_rtcp_port);
+  RS_CHECK_EQ(after.server_rtp_port, before.server_rtp_port);
+  RS_CHECK_EQ(after.server_rtcp_port, before.server_rtcp_port);
+  RS_CHECK(h.session.RtcpFd() >= 0);
+
+  h.session.SetFaultSetupOpenFail(false);
+  h.Drain();
+  Req play(Method::kPlay, "/live/trackID=0");
+  play.H("CSeq", "72");
+  play.H("Session", id);
+  play.H("Range", "npt=0-");
+  RS_CHECK_EQ(h.Do(play), 200U);
+  RS_CHECK(h.session.AwaitingRtpInfo());
+  return 0;
+#endif
 }
 
 // RFC 2326 defaults an absent unicast/multicast parameter to unicast. Some
@@ -1523,11 +1579,15 @@ int main() {
     return 1;
   if (TestOptions() != 0)
     return 1;
+  if (TestCseqZero() != 0)
+    return 1;
   if (TestDescribe() != 0)
     return 1;
   if (TestSetupTcp() != 0)
     return 1;
   if (TestSetupUdp() != 0)
+    return 1;
+  if (TestRepeatedSetupFailureKeepsTransport() != 0)
     return 1;
   if (TestSetupDefaultsToUnicast() != 0)
     return 1;

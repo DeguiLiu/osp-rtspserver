@@ -166,7 +166,6 @@ R4 Stop 后再次 Start。`Stop()` 把生命周期 HSM 推进到 `Stopped`，`Fr
 | 项 | 说明 | 建议 |
 |---|---|---|
 | UDP 突发 | 每客户端令牌桶突发 32 KiB，等于单轮发送预算；4 Mbit/s 下相当于一次放行约 64 ms 数据 | 弱网/Wi-Fi 目标板把突发降到 8–16 KiB，或按包间隔整形后复测 #47/#90 |
-| `kNoRef` 未处理 | `RtspSession::OnFrame` 只处理 `kQueueFull`；`AddRef` 失败时既不计数也不进入 AwaitIDR | 正常路径不可达，仍建议按 `kQueueFull` 处理，避免引用计数异常时静默花屏 |
 | 聚合 URI SETUP | 设计明确返回 459；部分 NVR 可能直接对 `/live` 发 SETUP | 真机不兼容时增加兼容开关，把 `/live` 映射到 trackID=0，不改变默认行为 |
 | Scale/Range | 忽略 `Scale`，2 倍速请求仍按 1 倍播放；非零 Range 返回 457 | 对直播流显式拒绝 `Scale != 1.0`，避免客户端误判为已加速 |
 | SR 采样精度 | SR 的 RTP 字段由最近发送时间外推，不包含编码与排队延迟 | 需要精确 A/V 同步时，在编码器时间戳入队时记录映射点 |

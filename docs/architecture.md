@@ -187,6 +187,7 @@ SETUP 先建资源再进 HSM；失败回滚 socket 与端口。PLAY 置 `NeedIdr
 | H.265 | RFC 7798 单 NAL | FU，3 字节（2 字节载荷头 + 1 字节 FU 头） | VPS、SPS、PPS |
 
 - 起始码支持 3/4 字节；4 字节起始码的前导零按上一 NAL 的尾部零裁掉，RTP 负载不含起始码。
+- 游标缓存当前 NAL 的起点、长度和下一 NAL 偏移，FU 分片时不重复扫描大 NAL。
 - `RtpPacket` 是只读视图：RTP 头和 FU 头在每客户端游标，负载指向共享 AU 或参数集。
 - UDP 用 `sendmsg` 三个 iovec 发送，不做逐包复制；负载上限 1200 B。
 - 同一 AU 的所有包共享时间戳，最后一个包置 marker。
@@ -194,6 +195,7 @@ SETUP 先建资源再进 HSM；失败回滚 socket 与端口。PLAY 置 `NeedIdr
 出口：
 
 - UDP 每会话一对 connected socket：RTP 偶数临时端口，RTCP 绑定 `RTP+1`；失败换端口重试，成功后回写 `server_port`。
+- RTP 每轮最多 8 个包用 `sendmmsg` 批量发送；平台不支持时回退逐包 `sendmsg`。
 - RTCP fd 注册到同一 poller，事件按 slot + generation 校验。
 - TCP 写成 `$ | channel | 16-bit length | RTP`，RTCP 写在协商的 `rtcp_channel`（默认 RTP+1）。
 - UDP `EAGAIN/ENOBUFS` 丢当前包并等待 IDR；TCP 短写保留剩余字节，2 s 无进展关闭。
@@ -269,16 +271,16 @@ stateDiagram-v2
 
 | 层 | 已处理 | 主要缺口 |
 |---|---|---|
-| 启动 | 配置/参数/监听失败返回错误；失败路径关 listener | `StartThreads` 失败后 timer、HSM、ingress 未复位，二次 `Start` 失败 |
-| 接入 | `EMFILE` 退避、槽满/限流关闭、tag 校验、延迟关闭 | `SetNonBlocking`/`SetNoDelay` 失败被忽略 |
+| 启动 | 配置/参数/监听失败返回错误；`StartThreads` 失败回滚 timer、HSM、ingress | 正常 `Stop()` 后同一对象仍不能重启 |
+| 接入 | `EMFILE` 退避、槽满/限流关闭、tag 校验、延迟关闭；`SetNonBlocking` 失败关闭连接 | `SetNoDelay` 失败仅影响时延 |
 | 解析 | 溢出、畸形、超长、超头、超大 body、坏 interleaved 均关闭 | 无请求完成 deadline；不拒绝 `Transfer-Encoding` |
-| 会话 | 400/404/405/454/455/457/459/461/503；PLAY 等 IDR 超时 | 重复 SETUP 打开失败时把 `transport_` 置 None，旧传输不再工作 |
-| 媒体 | 队列满、输入缺口、UDP `EAGAIN`、包化失败、令牌暂停 | `AddRef` 失败（`kNoRef`）未计数也未进入 AwaitIDR |
+| 会话 | 400/404/405/454/455/457/459/461/503；PLAY 等 IDR 超时；CSeq 0 也回写；重复 SETUP 失败保留旧传输 | 无 PAUSE/seek |
+| 媒体 | 队列满、输入缺口、UDP `EAGAIN`、包化失败、令牌暂停；`kNoRef` 按队列满处理 | 无 |
 | RTCP | 坏包计数、BYE 关闭、SR 发送失败 1 s 重试 | 接收缓冲 128 B，大 compound 被截断 |
 | 停机 | 幂等；先停 loop、join、关连接 | 源静默停流不关会话；同一对象不能重启 |
-| 安全 | session id/SSRC 用 `getrandom` | `getrandom` 失败回退单调时钟，ID 可预测 |
+| 安全 | session id/SSRC 用 `getrandom`；熵源失败则 `Start()` 返回错误 | 无 |
 
-按风险排序：重复 SETUP 失败 > `Start` 回滚 > `kNoRef` > RTCP/CSeq/`SetNonBlocking` 防御项。
+剩余风险：源静默停流 > RTCP 大 compound > 请求完成 deadline/`Transfer-Encoding` > 正常 `Stop()` 后重启。
 
 ## 9. 部署与集成
 

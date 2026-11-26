@@ -147,6 +147,19 @@ int CmdStats(int argc, char** argv) noexcept {
   osp::DebugShell::Printf("shell commands=%" PRIu64 " rejected=%" PRIu64 " log=%s fault_drop=%" PRIu32 "\r\n",
                           static_cast<uint64_t>(g.shell_commands), static_cast<uint64_t>(g.shell_rejects),
                           LogLevelName(s.log_level), static_cast<uint32_t>(s.fault_drop_remaining));
+  osp::DebugShell::Printf("closes");
+  bool any_close = false;
+  for (uint32_t i = 0U; i < static_cast<uint32_t>(kCloseCount); ++i) {
+    if (g.close_reasons[i] != 0U) {
+      any_close = true;
+      osp::DebugShell::Printf(" %s=%" PRIu64, CloseReasonName(static_cast<CloseReason>(i)),
+                              static_cast<uint64_t>(g.close_reasons[i]));
+    }
+  }
+  if (!any_close) {
+    osp::DebugShell::Printf(" none");
+  }
+  osp::DebugShell::Printf("\r\n");
   return 0;
 }
 
@@ -214,10 +227,11 @@ int CmdClient(int argc, char** argv) noexcept {
         "channel rtp=%" PRIu32 " rtcp=%" PRIu32 " seq=%" PRIu32 " ts=%" PRIu32 " ssrc=%" PRIu32 "\r\n",
         static_cast<uint32_t>(x.rtp_channel), static_cast<uint32_t>(x.rtcp_channel), static_cast<uint32_t>(x.seq),
         static_cast<uint32_t>(x.rtp_ts), static_cast<uint32_t>(x.ssrc));
-    osp::DebugShell::Printf("queue depth=%" PRIu32 " bytes=%" PRIu32 " oldest=%" PRIu32 "ms stall_until=%" PRIu64
-                            "\r\n",
+    osp::DebugShell::Printf("queue depth=%" PRIu32 " bytes=%" PRIu32 " tx_pending=%" PRIu32
+                            " oldest=%" PRIu32 "ms stall_until=%" PRIu64 "\r\n",
                             static_cast<uint32_t>(x.queue_depth), static_cast<uint32_t>(x.queue_bytes),
-                            static_cast<uint32_t>(x.oldest_age_ms), static_cast<uint64_t>(c.stall_until_ns));
+                            static_cast<uint32_t>(x.tx_pending), static_cast<uint32_t>(x.oldest_age_ms),
+                            static_cast<uint64_t>(c.stall_until_ns));
     osp::DebugShell::Printf("tcp rtt=%" PRIu32 "us cwnd=%" PRIu32 " retrans=%" PRIu32 " unacked=%" PRIu32
                             " notsent=%" PRIu32 " sndbuf=%" PRIu32 " rcvbuf=%" PRIu32 "\r\n",
                             static_cast<uint32_t>(c.tcp_rtt_us), static_cast<uint32_t>(c.tcp_cwnd),
@@ -328,9 +342,11 @@ int CmdStream(int argc, char** argv) noexcept {
                           CodecName(g.codec), static_cast<uint32_t>(g.param_gen), static_cast<uint32_t>(g.vps_len),
                           static_cast<uint32_t>(g.sps_len), static_cast<uint32_t>(g.pps_len), s.idr_hook_set ? 1 : 0);
   osp::DebugShell::Printf(
-      "au in=%" PRIu64 " ok=%" PRIu64 " drop=%" PRIu64 " gaps=%" PRIu64 " source_stopped=%d loop_failed=%d\r\n",
+      "au in=%" PRIu64 " ok=%" PRIu64 " drop=%" PRIu64 " gaps=%" PRIu64
+      " source_stopped=%d source_error=%" PRIu32 " loop_failed=%d\r\n",
       static_cast<uint64_t>(g.au_in), static_cast<uint64_t>(g.au_accepted), static_cast<uint64_t>(g.au_dropped),
-      static_cast<uint64_t>(g.input_gaps), g.source_stopped ? 1 : 0, g.loop_failed ? 1 : 0);
+      static_cast<uint64_t>(g.input_gaps), g.source_stopped ? 1 : 0, static_cast<uint32_t>(g.source_error),
+      g.loop_failed ? 1 : 0);
   return 0;
 }
 
@@ -341,20 +357,10 @@ int CmdRtcp(int argc, char** argv) noexcept {
     return -1;
   }
   const ServerSnapshot& s = ShellSnapshot();
-  uint32_t sr = 0U;
-  uint32_t rr = 0U;
-  uint32_t bye = 0U;
-  uint32_t bad = 0U;
-  for (uint32_t i = 0U; i < s.client_count; ++i) {
-    const SessionCounters& c = s.clients[i].session.counters;
-    sr += c.rtcp_sr;
-    rr += c.rtcp_rr;
-    bye += c.rtcp_bye;
-    bad += c.rtcp_bad;
-  }
-  osp::DebugShell::Printf(
-      "rtcp sr=%" PRIu32 " rr=%" PRIu32 " bye=%" PRIu32 " bad=%" PRIu32 " (per-client counters)\r\n",
-      static_cast<uint32_t>(sr), static_cast<uint32_t>(rr), static_cast<uint32_t>(bye), static_cast<uint32_t>(bad));
+  const ServerStats& g = s.stats;
+  osp::DebugShell::Printf("rtcp total sr=%" PRIu64 " rr=%" PRIu64 " bye=%" PRIu64 " bad=%" PRIu64 "\r\n",
+                          static_cast<uint64_t>(g.rtcp_sr), static_cast<uint64_t>(g.rtcp_rr),
+                          static_cast<uint64_t>(g.rtcp_bye), static_cast<uint64_t>(g.rtcp_bad));
   return 0;
 }
 
@@ -400,6 +406,11 @@ int CmdConfig(int argc, char** argv) noexcept {
                           static_cast<uint32_t>(kRtpPayloadMax), static_cast<uint32_t>(kFps),
                           static_cast<uint32_t>(kClientEgressRateBps), static_cast<uint32_t>(kClientEgressBurstBytes),
                           LogLevelName(s.log_level));
+  osp::DebugShell::Printf("ip_accept=%" PRIu32 "/s burst=%" PRIu32 " ip_request=%" PRIu32 "/s burst=%" PRIu32
+                          " udp_batch=%" PRIu32 "\r\n",
+                          static_cast<uint32_t>(kIpAcceptRatePerSec), static_cast<uint32_t>(kIpAcceptBurst),
+                          static_cast<uint32_t>(kIpRequestRatePerSec), static_cast<uint32_t>(kIpRequestBurst),
+                          static_cast<uint32_t>(kMaxUdpBatch));
   return 0;
 }
 
@@ -644,21 +655,44 @@ int CmdSlow(int argc, char** argv) noexcept {
 }
 #endif
 
+int CmdStatus(int argc, char** argv) noexcept {
+  static_cast<void>(argc);
+  static_cast<void>(argv);
+  if (!RequireServer()) {
+    return -1;
+  }
+  osp::DebugShell::Printf("== version ==\r\n");
+  static_cast<void>(CmdVersion(0, nullptr));
+  osp::DebugShell::Printf("== time ==\r\n");
+  static_cast<void>(CmdTime(0, nullptr));
+  osp::DebugShell::Printf("== config ==\r\n");
+  static_cast<void>(CmdConfig(0, nullptr));
+  osp::DebugShell::Printf("== mem ==\r\n");
+  static_cast<void>(CmdMem(0, nullptr));
+  osp::DebugShell::Printf("== pool ==\r\n");
+  static_cast<void>(CmdPool(0, nullptr));
+  osp::DebugShell::Printf("== fd ==\r\n");
+  static_cast<void>(CmdFd(0, nullptr));
+  osp::DebugShell::Printf("== timers ==\r\n");
+  static_cast<void>(CmdTimers(0, nullptr));
+  osp::DebugShell::Printf("== stream ==\r\n");
+  static_cast<void>(CmdStream(0, nullptr));
+  osp::DebugShell::Printf("== stats ==\r\n");
+  static_cast<void>(CmdStats(0, nullptr));
+  osp::DebugShell::Printf("== rtcp ==\r\n");
+  static_cast<void>(CmdRtcp(0, nullptr));
+  osp::DebugShell::Printf("== latency ==\r\n");
+  static_cast<void>(CmdLatency(0, nullptr));
+  osp::DebugShell::Printf("== clients ==\r\n");
+  static_cast<void>(CmdClients(0, nullptr));
+  osp::DebugShell::Printf("== net ==\r\n");
+  static_cast<void>(CmdNet(0, nullptr));
+  return 0;
+}
+
 void RegisterShellCommands() noexcept {
-  static osp::ShellAutoReg stats{"stats", CmdStats, "Show global server counters"};
-  static osp::ShellAutoReg clients{"clients", CmdClients, "List active RTSP clients"};
+  static osp::ShellAutoReg status{"status", CmdStatus, "Full server snapshot"};
   static osp::ShellAutoReg client{"client", CmdClient, "Show one client: client <slot>"};
-  static osp::ShellAutoReg pool{"pool", CmdPool, "Show frame pool and queues"};
-  static osp::ShellAutoReg fd{"fd", CmdFd, "Show listener/client fds and watchers"};
-  static osp::ShellAutoReg timers{"timers", CmdTimers, "Show timers and snapshot age"};
-  static osp::ShellAutoReg stream{"stream", CmdStream, "Show codec and source state"};
-  static osp::ShellAutoReg net{"net", CmdNet, "Show TCP RTT/cwnd/retrans/socket buffers"};
-  static osp::ShellAutoReg rtcp{"rtcp", CmdRtcp, "Show RTCP status"};
-  static osp::ShellAutoReg latency{"latency", CmdLatency, "Show loop latency percentiles"};
-  static osp::ShellAutoReg mem{"mem", CmdMem, "Show sizes and static buffers"};
-  static osp::ShellAutoReg config{"config", CmdConfig, "Show runtime limits"};
-  static osp::ShellAutoReg time{"time", CmdTime, "Show monotonic and wall clock"};
-  static osp::ShellAutoReg version{"version", CmdVersion, "Show build version"};
   static osp::ShellAutoReg log{"log", CmdLog, "Set log level", osp::ShellCmdFlags::kAdmin};
   static osp::ShellAutoReg kick{"kick", CmdKick, "Close one client: kick <slot>", osp::ShellCmdFlags::kAdmin};
   static osp::ShellAutoReg reset{"reset", CmdReset, "Reset stats or one client", osp::ShellCmdFlags::kAdmin};

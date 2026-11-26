@@ -93,6 +93,7 @@ constexpr uint8_t kRtpVersionByte = 0x80U;  // V=2, P=0, X=0, CC=0.
 constexpr uint8_t kRtpMarkerMask = 0x80U;
 constexpr uint32_t kRtpHeaderBytes = 12U;
 constexpr uint32_t kInterleavedHeaderBytes = 4U;
+constexpr uint32_t kMaxUdpBatch = 8U;  // RTP datagrams per sendmmsg call.
 constexpr uint32_t kMaxInterleavedFrameBytes = 0xFFFFU;
 constexpr uint32_t kMaxInterleavedChannel = 127U;
 constexpr uint32_t kByteMask = 0xFFU;
