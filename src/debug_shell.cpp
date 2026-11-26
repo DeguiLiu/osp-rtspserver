@@ -227,8 +227,8 @@ int CmdClient(int argc, char** argv) noexcept {
         "channel rtp=%" PRIu32 " rtcp=%" PRIu32 " seq=%" PRIu32 " ts=%" PRIu32 " ssrc=%" PRIu32 "\r\n",
         static_cast<uint32_t>(x.rtp_channel), static_cast<uint32_t>(x.rtcp_channel), static_cast<uint32_t>(x.seq),
         static_cast<uint32_t>(x.rtp_ts), static_cast<uint32_t>(x.ssrc));
-    osp::DebugShell::Printf("queue depth=%" PRIu32 " bytes=%" PRIu32 " tx_pending=%" PRIu32
-                            " oldest=%" PRIu32 "ms stall_until=%" PRIu64 "\r\n",
+    osp::DebugShell::Printf("queue depth=%" PRIu32 " bytes=%" PRIu32 " tx_pending=%" PRIu32 " oldest=%" PRIu32
+                            "ms stall_until=%" PRIu64 "\r\n",
                             static_cast<uint32_t>(x.queue_depth), static_cast<uint32_t>(x.queue_bytes),
                             static_cast<uint32_t>(x.tx_pending), static_cast<uint32_t>(x.oldest_age_ms),
                             static_cast<uint64_t>(c.stall_until_ns));
@@ -341,12 +341,11 @@ int CmdStream(int argc, char** argv) noexcept {
                           " idr_hook=%d\r\n",
                           CodecName(g.codec), static_cast<uint32_t>(g.param_gen), static_cast<uint32_t>(g.vps_len),
                           static_cast<uint32_t>(g.sps_len), static_cast<uint32_t>(g.pps_len), s.idr_hook_set ? 1 : 0);
-  osp::DebugShell::Printf(
-      "au in=%" PRIu64 " ok=%" PRIu64 " drop=%" PRIu64 " gaps=%" PRIu64
-      " source_stopped=%d source_error=%" PRIu32 " loop_failed=%d\r\n",
-      static_cast<uint64_t>(g.au_in), static_cast<uint64_t>(g.au_accepted), static_cast<uint64_t>(g.au_dropped),
-      static_cast<uint64_t>(g.input_gaps), g.source_stopped ? 1 : 0, static_cast<uint32_t>(g.source_error),
-      g.loop_failed ? 1 : 0);
+  osp::DebugShell::Printf("au in=%" PRIu64 " ok=%" PRIu64 " drop=%" PRIu64 " gaps=%" PRIu64
+                          " source_stopped=%d source_error=%" PRIu32 " loop_failed=%d\r\n",
+                          static_cast<uint64_t>(g.au_in), static_cast<uint64_t>(g.au_accepted),
+                          static_cast<uint64_t>(g.au_dropped), static_cast<uint64_t>(g.input_gaps),
+                          g.source_stopped ? 1 : 0, static_cast<uint32_t>(g.source_error), g.loop_failed ? 1 : 0);
   return 0;
 }
 

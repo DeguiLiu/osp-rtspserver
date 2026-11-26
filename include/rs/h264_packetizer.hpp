@@ -30,7 +30,7 @@ enum class NalType : uint8_t {
 };
 
 struct NalUnit {
-  osp::byte_span data;  // NAL payload without the start code.
+  osp::byte_span data;   // NAL payload without the start code.
   uint32_t offset = 0U;  // Payload offset in the access unit.
   uint8_t type = 0U;
 };

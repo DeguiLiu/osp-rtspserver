@@ -150,8 +150,8 @@ osp::expected<RtpPacket, PacketizeError> EmitFu(const uint8_t* au, uint32_t next
     }
     const uint32_t frag_end = start + chunk;
     const bool last_fragment = (frag_end >= nal_len);
-    cursor.fu_header[0] = static_cast<uint8_t>((au[nal_start] & kHevcFuKeepMask) |
-                                               static_cast<uint8_t>(kFuType << kHevcTypeShift));
+    cursor.fu_header[0] =
+        static_cast<uint8_t>((au[nal_start] & kHevcFuKeepMask) | static_cast<uint8_t>(kFuType << kHevcTypeShift));
     cursor.fu_header[1] = au[nal_start + 1U];
     cursor.fu_header[2] =
         static_cast<uint8_t>((first ? kFuStartMask : 0x00U) | (last_fragment ? kFuEndMask : 0x00U) | type);

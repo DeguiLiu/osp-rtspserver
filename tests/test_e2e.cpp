@@ -6,6 +6,7 @@
 // nothing is skipped silently.
 // SPDX-License-Identifier: MIT
 #include "e2e_client.hpp"
+
 #include "rs/config.hpp"
 
 #include <cinttypes>
@@ -1373,8 +1374,8 @@ bool TestConnectionLimit(Ctx& ctx, std::string& err) {
       rse2e::Client replacement;
       rse2e::Response options;
       ok = replacement.Connect("127.0.0.1", ctx.port, static_cast<int>(kConnectTimeoutMs), err) &&
-           replacement.Request("OPTIONS", "*", {"CSeq: 1"}, "", err) &&
-           replacement.ReadResponse(options, 1000, err) && ExpectStatus(options, 200U, "OPTIONS", err);
+           replacement.Request("OPTIONS", "*", {"CSeq: 1"}, "", err) && replacement.ReadResponse(options, 1000, err) &&
+           ExpectStatus(options, 200U, "OPTIONS", err);
     }
     if (!ok) {
       err = "replacement connection failed: " + err;
