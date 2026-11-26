@@ -561,7 +561,7 @@ int TestRtcpSenderReportAndRr() {
 
   // 6 s later the periodic sender report must be emitted on the RTCP channel.
   RS_CHECK_EQ(h.session.Counters().rtcp_sr, 0U);
-  struct timespec wall_before {};
+  struct timespec wall_before{};
   RS_CHECK_EQ(::clock_gettime(CLOCK_REALTIME, &wall_before), 0);
   RS_CHECK(h.session.OnTick(h.now + 6000000000ULL));
   RS_CHECK_EQ(h.session.Counters().rtcp_sr, 1U);
@@ -1114,8 +1114,8 @@ int TestRtpTimestampWrap() {
 
   constexpr uint64_t kElapsedSeconds = 50000U;
   FrameDesc second{};
-  RS_CHECK(PushAu(h, au.data(), static_cast<uint32_t>(au.size()), kFrameIdr,
-                  1000000ULL + kElapsedSeconds * kNsPerSec, second));
+  RS_CHECK(PushAu(h, au.data(), static_cast<uint32_t>(au.size()), kFrameIdr, 1000000ULL + kElapsedSeconds * kNsPerSec,
+                  second));
   h.session.OnFrame(second, h.now);
   h.ingress.Release(second);
   capture.clear();

@@ -58,16 +58,16 @@ class RtcpEndpoint final {
         (transport != TransportKind::kUdp && transport != TransportKind::kTcp)) {
       return;
     }
-    struct timespec wall_time {};
+    struct timespec wall_time{};
     if ((0 != ::clock_gettime(CLOCK_REALTIME, &wall_time)) || (wall_time.tv_sec < 0)) {
       next_sr_ns_ = now_ns + kNsPerMs * kMsPerSec;
       return;
     }
-    const uint64_t wall_ns = static_cast<uint64_t>(wall_time.tv_sec) * kNsPerSec +
-                             static_cast<uint64_t>(wall_time.tv_nsec);
+    const uint64_t wall_ns =
+        static_cast<uint64_t>(wall_time.tv_sec) * kNsPerSec + static_cast<uint64_t>(wall_time.tv_nsec);
     const uint64_t elapsed_ns = (now_ns >= last_rtp_ns_) ? (now_ns - last_rtp_ns_) : 0U;
-    const uint64_t elapsed_ticks = (elapsed_ns / kNsPerSec) * kClockRate +
-                                   ((elapsed_ns % kNsPerSec) * kClockRate) / kNsPerSec;
+    const uint64_t elapsed_ticks =
+        (elapsed_ns / kNsPerSec) * kClockRate + ((elapsed_ns % kNsPerSec) * kClockRate) / kNsPerSec;
     const uint32_t rtp_ts = last_rtp_ts_ + static_cast<uint32_t>(elapsed_ticks);
     uint8_t buf[kMaxRtcpBytes] = {};
     char cname[32] = {};

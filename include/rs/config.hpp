@@ -19,8 +19,8 @@ constexpr uint32_t kMaxConnections = 16U;  // RTSP control connections, incl. no
 constexpr uint32_t kMaxUriBytes = 256U;
 constexpr uint32_t kMaxHeaderCount = 24U;
 constexpr uint32_t kMaxHeaderBytes = 2048U;
-constexpr uint32_t kRtspRxBytes = 8192U;     // Per-connection inbound linear buffer.
-constexpr uint32_t kRtspTxBytes = 32768U;    // Per-connection outbound arena (control + TCP media).
+constexpr uint32_t kRtspRxBytes = 8192U;   // Per-connection inbound linear buffer.
+constexpr uint32_t kRtspTxBytes = 32768U;  // Per-connection outbound arena (control + TCP media).
 constexpr uint32_t kControlTxReserveBytes = 8192U;
 constexpr uint32_t kMediaTxLimitBytes = kRtspTxBytes - kControlTxReserveBytes;
 

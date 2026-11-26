@@ -668,7 +668,8 @@ void RegisterShellCommands() noexcept {
                                osp::ShellCmdFlags::kAdmin};
   static osp::ShellAutoReg shutdown{"shutdown", CmdShutdown, "Request graceful shutdown", osp::ShellCmdFlags::kAdmin};
 #if defined(RS_ENABLE_FAULT_INJECTION)
-  static osp::ShellAutoReg fault{"fault", CmdFault, "Fault injection: drop/stall/eagain/idr", osp::ShellCmdFlags::kAdmin};
+  static osp::ShellAutoReg fault{"fault", CmdFault, "Fault injection: drop/stall/eagain/idr",
+                                 osp::ShellCmdFlags::kAdmin};
   static osp::ShellAutoReg simulate{"simulate", CmdSlow, "Simulate slow client: simulate slow <slot> <bps>",
                                     osp::ShellCmdFlags::kAdmin};
 #endif

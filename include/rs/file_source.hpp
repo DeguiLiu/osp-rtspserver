@@ -43,7 +43,8 @@ class FileSource final {
 
   // Starts the paced producer. `callbacks` must stay valid until Stop().
   [[nodiscard]] osp::expected<void, FileSourceError> Start(
-      FrameIngress& ingress, SourceCallbacks callbacks, const osp::ThreadOptions& options = osp::ThreadOptions{}) noexcept;
+      FrameIngress& ingress, SourceCallbacks callbacks,
+      const osp::ThreadOptions& options = osp::ThreadOptions{}) noexcept;
   void Stop() noexcept;
 
  private:

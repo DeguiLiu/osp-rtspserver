@@ -1244,8 +1244,8 @@ bool RtspSession::OnTick(uint64_t now_ns) noexcept {
     RequestIdr(now_ns);
   }
   if (hsm_.IsInState(sess::kPlaying)) {
-    rtcp_.MaybeSend(now_ns, ssrc_, cfg_.advertise_ip, counters_.packets_sent, transport_, rtcp_channel_,
-                    tx_, udp_, counters_.rtcp_sr, counters_.rtcp_bad);
+    rtcp_.MaybeSend(now_ns, ssrc_, cfg_.advertise_ip, counters_.packets_sent, transport_, rtcp_channel_, tx_, udp_,
+                    counters_.rtcp_sr, counters_.rtcp_bad);
   }
   if (awaiting_rtp_info_ && now_ns > idr_deadline_ns_) {
     // Design §9.3: a PLAY waiting for its first IDR must not hang; close.

@@ -265,7 +265,7 @@ bool FileSource::LoadParamSets() noexcept {
 }
 
 osp::expected<void, FileSourceError> FileSource::Start(FrameIngress& ingress, SourceCallbacks callbacks,
-                                                      const osp::ThreadOptions& options) noexcept {
+                                                       const osp::ThreadOptions& options) noexcept {
   if (file_ == nullptr) {
     return osp::expected<void, FileSourceError>::error(FileSourceError::kOpenFailed);
   }
