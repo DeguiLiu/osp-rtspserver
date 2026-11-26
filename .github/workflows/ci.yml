@@ -14,6 +14,13 @@ concurrency:
 permissions:
   contents: read
 
+# One place to bump the newosp baseline. The server requires the checked
+# POSIX thread startup (OSP_THREAD_POSIX_CHECKED_START), so a stale pin fails
+# at configure time instead of on a board.
+env:
+  NEWOSP_REPOSITORY: DeguiLiu/newosp
+  NEWOSP_REF: 5ef966c15ba7b4805dc70e65cc3b7fc2115bc862
+
 jobs:
   host-test:
     runs-on: ubuntu-latest
@@ -29,9 +36,9 @@ jobs:
       - name: Checkout newosp
         uses: actions/checkout@v5
         with:
-          repository: DeguiLiu/newosp
+          repository: ${{ env.NEWOSP_REPOSITORY }}
           # Baseline pinned by the design document.
-          ref: 3062194807113c8b139a0197786cbab9bd2638a7
+          ref: ${{ env.NEWOSP_REF }}
           path: newosp
 
       - name: Install ffmpeg
@@ -64,8 +71,8 @@ jobs:
       - name: Checkout newosp
         uses: actions/checkout@v5
         with:
-          repository: DeguiLiu/newosp
-          ref: 3062194807113c8b139a0197786cbab9bd2638a7
+          repository: ${{ env.NEWOSP_REPOSITORY }}
+          ref: ${{ env.NEWOSP_REF }}
           path: newosp
 
       - name: Configure
@@ -93,8 +100,8 @@ jobs:
       - name: Checkout newosp
         uses: actions/checkout@v5
         with:
-          repository: DeguiLiu/newosp
-          ref: 3062194807113c8b139a0197786cbab9bd2638a7
+          repository: ${{ env.NEWOSP_REPOSITORY }}
+          ref: ${{ env.NEWOSP_REF }}
           path: newosp
 
       # ASan cannot map its shadow under kernel 6.5+ high-entropy ASLR
@@ -132,8 +139,8 @@ jobs:
       - name: Checkout newosp
         uses: actions/checkout@v5
         with:
-          repository: DeguiLiu/newosp
-          ref: 3062194807113c8b139a0197786cbab9bd2638a7
+          repository: ${{ env.NEWOSP_REPOSITORY }}
+          ref: ${{ env.NEWOSP_REF }}
           path: newosp
 
       - name: Reduce ASLR entropy for sanitizers
@@ -177,8 +184,8 @@ jobs:
       - name: Checkout newosp
         uses: actions/checkout@v5
         with:
-          repository: DeguiLiu/newosp
-          ref: 3062194807113c8b139a0197786cbab9bd2638a7
+          repository: ${{ env.NEWOSP_REPOSITORY }}
+          ref: ${{ env.NEWOSP_REF }}
           path: newosp
 
       - name: Install the aarch64 cross toolchain and qemu-user
@@ -223,6 +230,65 @@ jobs:
       - name: Zero-heap symbol audit
         run: bash test/elf_audit.sh aarch64-linux-gnu-nm build-arm64/CMakeFiles/rs_core.dir/src/*.o
 
+  # armhf (32-bit ARM) is the worst case for this code base: it is the only
+  # supported target where std::atomic<uint64_t> is not lock-free by default,
+  # so a careless atomic turns into a libatomic lock plus heap allocation.
+  # The job compiles with the distro armv7 hard-float ABI and executes every
+  # test under qemu-arm-aarch32, which also exercises the 32-bit size_t and
+  # pointer-width paths.
+  arm-linux-armhf:
+    name: arm-linux (armhf, qemu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Checkout newosp
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ env.NEWOSP_REPOSITORY }}
+          ref: ${{ env.NEWOSP_REF }}
+          path: newosp
+
+      - name: Install the armhf cross toolchain and qemu-user
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            g++-arm-linux-gnueabihf gcc-arm-linux-gnueabihf \
+            libc6-dev-armhf-cross linux-libc-dev-armhf-cross \
+            qemu-user
+
+      - name: Configure (armhf cross)
+        run: |
+          cmake -S . -B build-armhf \
+            -DCMAKE_TOOLCHAIN_FILE=cmake/armhf-linux-gnueabihf.toolchain.cmake \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DNEWOSP_DIR="${{ github.workspace }}/newosp" \
+            -DRS_BUILD_E2E=OFF \
+            -DRS_ENABLE_DEBUG_SHELL=OFF \
+            -DRS_ENABLE_FAULT_INJECTION=OFF
+
+      - name: Build
+        run: cmake --build build-armhf -j"$(nproc)"
+
+      # CMAKE_CROSSCOMPILING_EMULATOR in the toolchain file makes ctest run
+      # every test binary through qemu-arm.
+      - name: Test under qemu-arm
+        run: ctest --test-dir build-armhf --output-on-failure
+
+      - name: Report the target architecture
+        run: |
+          # Guard against a silent fallback to the host compiler.
+          file build-armhf/rtspserver_demo
+          if ! file build-armhf/rtspserver_demo | grep -q "32-bit LSB.*ARM"; then
+            echo "FAIL: rtspserver_demo was not built for 32-bit ARM" >&2
+            exit 1
+          fi
+
+      - name: Zero-heap symbol audit
+        run: bash test/elf_audit.sh arm-linux-gnueabihf-nm build-armhf/CMakeFiles/rs_core.dir/src/*.o
+
   # Format, lint and static-analysis gate. coact keeps these in .ai/ scripts
   # that only run locally; osp-rtspserver runs them in CI so the gate cannot
   # rot into a tool nobody executes.
@@ -237,15 +303,17 @@ jobs:
       - name: Checkout newosp
         uses: actions/checkout@v5
         with:
-          repository: DeguiLiu/newosp
-          ref: 3062194807113c8b139a0197786cbab9bd2638a7
+          repository: ${{ env.NEWOSP_REPOSITORY }}
+          ref: ${{ env.NEWOSP_REF }}
           path: newosp
 
+      # The tools are pinned: clang-format output changes between LLVM
+      # releases, so an unpinned runner image turns a green gate red without
+      # any source change. Bump these versions and reformat in one commit.
       - name: Install the analysis tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends clang-format clang-tidy
-          python3 -m pip install --user cpplint
+          python3 -m pip install --user \
+            clang-format==21.1.8 clang-tidy==21.1.8 cpplint
 
       - name: clang-format
         run: bash .ai/format.sh --check
