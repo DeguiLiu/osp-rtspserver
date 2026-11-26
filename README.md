@@ -145,6 +145,7 @@ demo and connect over telnet. Read-only commands include `stats`, `clients`,
 - [Architecture overview](docs/architecture.md)
 - [Test report](docs/test-report.md)
 - [Upstream issue audit](docs/upstream-issue-audit.md)
+- [Design note: comparison with PHZ76/RtspServer](docs/blogs/01-rtsp-server-design-and-phz76-comparison.md)
 
 ## License
 
