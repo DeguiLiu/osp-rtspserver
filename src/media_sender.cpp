@@ -4,66 +4,74 @@
 
 #include <cstring>
 
+#include <type_traits>
+
 namespace rs {
 namespace {
 
-struct ResetCursorVisitor {
-  void operator()(ClientCursor& c) const noexcept { H264Packetizer::ResetCursor(c); }
-  void operator()(HevcCursor& c) const noexcept { H265Packetizer::ResetCursor(c); }
+// The variant alternative that carries each codec, as its compile-time
+// index. newosp provides this facility as osp::VariantIndex, but it lives
+// in osp/bus.hpp, which carries the whole AsyncBus; using it here would
+// pull that in for an index lookup. The local copy below is the same
+// recursive definition. When newosp moves VariantIndex into
+// osp/vocabulary.hpp, replace this with osp::VariantIndex.
+namespace detail {
+
+template <typename T, size_t I, typename Variant>
+struct CursorIndexImpl;
+
+template <typename T, size_t I>
+struct CursorIndexImpl<T, I, std::variant<>> {
+  static constexpr size_t value = static_cast<size_t>(-1);
 };
 
-struct CursorSeqVisitor {
-  uint16_t operator()(const ClientCursor& c) const noexcept { return c.seq; }
-  uint16_t operator()(const HevcCursor& c) const noexcept { return c.seq; }
+template <typename T, size_t I, typename First, typename... Rest>
+struct CursorIndexImpl<T, I, std::variant<First, Rest...>> {
+  static constexpr size_t value =
+      std::is_same<T, First>::value ? I : CursorIndexImpl<T, I + 1, std::variant<Rest...>>::value;
 };
 
-struct CursorTsVisitor {
-  uint32_t operator()(const ClientCursor& c) const noexcept { return c.ts; }
-  uint32_t operator()(const HevcCursor& c) const noexcept { return c.ts; }
+}  // namespace detail
+
+template <typename T, typename Variant>
+struct CursorIndex;
+
+template <typename T, typename... Types>
+struct CursorIndex<T, std::variant<Types...>> {
+  static constexpr size_t value = detail::CursorIndexImpl<T, 0, std::variant<Types...>>::value;
 };
 
-struct StartCursorVisitor {
-  uint16_t seq;
-  uint32_t ts;
-  uint32_t au_len;
-  bool inject;
-  void operator()(ClientCursor& c) const noexcept {
-    c.seq = seq;
-    H264Packetizer::StartAu(c, au_len, ts, inject);
-    c.seq = seq;
-    c.ts = ts;
-    c.au_len = au_len;
-    c.in_au = true;
-  }
-  void operator()(HevcCursor& c) const noexcept {
-    c.seq = seq;
-    H265Packetizer::StartAu(c, au_len, ts, inject);
-    c.seq = seq;
-    c.ts = ts;
-    c.au_len = au_len;
-    c.in_au = true;
-  }
-};
+constexpr size_t kH264CursorIndex = CursorIndex<ClientCursor, CodecCursor>::value;
+constexpr size_t kH265CursorIndex = CursorIndex<HevcCursor, CodecCursor>::value;
+static_assert(kH264CursorIndex != static_cast<size_t>(-1), "ClientCursor must be a variant alternative");
+static_assert(kH265CursorIndex != static_cast<size_t>(-1), "HevcCursor must be a variant alternative");
+static_assert(kH264CursorIndex != kH265CursorIndex, "the codec cursors must be distinct alternatives");
 
-struct NextPacketVisitor {
-  const uint8_t* au;
-  uint32_t au_len;
-  uint32_t ssrc;
-  const ParamSets& h264;
-  const HevcParamSets& h265;
-  osp::expected<RtpPacket, PacketizeError> operator()(ClientCursor& c) const noexcept {
-    return H264Packetizer::Next(au, au_len, h264, c, ssrc);
-  }
-  osp::expected<RtpPacket, PacketizeError> operator()(HevcCursor& c) const noexcept {
-    return H265Packetizer::Next(au, au_len, h265, c, ssrc);
-  }
-};
+// The codec enumerators and the variant alternatives must agree, so that a
+// codec value can select an alternative without a runtime search. The
+// variant order follows the codec order.
+static_assert(static_cast<uint8_t>(Codec::kH264) == kH264CursorIndex, "Codec::kH264 must select the H.264 cursor");
+static_assert(static_cast<uint8_t>(Codec::kH265) == kH265CursorIndex, "Codec::kH265 must select the H.265 cursor");
+
+// ---------------------------------------------------------------------------
+// Common cursor logic. These are plain (non-template) functions over the
+// shared PacketizeCursor base, so the behaviour exists once instead of once
+// per codec. Only the packetizer call differs between H.264 and H.265, and
+// that difference is confined to the thin lambdas further down.
+// ---------------------------------------------------------------------------
+
+// Starts a new access unit. The codec's StartAu already resets the AU walk
+// (nal_offset, frag_offset, au_len, ts, in_au, marker_sent) and stages the
+// parameter sets; the sequence number is the only shared field it does not
+// own, because it belongs to the transport rather than to the codec.
+void StartCommonFields(PacketizeCursor& cursor, uint16_t seq) noexcept {
+  cursor.seq = seq;
+}
 
 }  // namespace
 
 void MediaSender::Configure(FrameIngress& ingress, const TrackParams& params) noexcept {
   ingress_ = &ingress;
-  codec_ = params.codec;
   h264_params_ = ParamSets{};
   h264_params_.sps = params.sps;
   h264_params_.sps_len = params.sps_len;
@@ -76,7 +84,10 @@ void MediaSender::Configure(FrameIngress& ingress, const TrackParams& params) no
   h265_params_.sps_len = params.sps_len;
   h265_params_.pps = params.pps;
   h265_params_.pps_len = params.pps_len;
-  if (codec_ == Codec::kH265) {
+  // Select the alternative that matches the codec. The static_asserts above
+  // fix the codec-to-alternative mapping at compile time, so this only has to
+  // pick between the two known alternatives.
+  if (params.codec == Codec::kH265) {
     cursor_.emplace<HevcCursor>();
   } else {
     cursor_.emplace<ClientCursor>();
@@ -100,7 +111,18 @@ void MediaSender::ReleaseFrames() noexcept {
 }
 
 void MediaSender::ResetCursorState() noexcept {
-  std::visit(ResetCursorVisitor{}, cursor_);
+  // The codec's ResetCursor already resets every shared field plus its own
+  // parameter-set staging, so the lambda only picks the packetizer.
+  std::visit(
+      [](auto& cursor) {
+        using Cursor = std::decay_t<decltype(cursor)>;
+        if constexpr (std::is_same_v<Cursor, ClientCursor>) {
+          H264Packetizer::ResetCursor(cursor);
+        } else {
+          H265Packetizer::ResetCursor(cursor);
+        }
+      },
+      cursor_);
 }
 
 void MediaSender::Reset() noexcept {
@@ -186,7 +208,18 @@ osp::expected<RtpPacket, PacketizeError> MediaSender::NextPacket(uint32_t ssrc) 
     return osp::expected<RtpPacket, PacketizeError>::error(PacketizeError::kEndOfAu);
   }
   const uint8_t* au = Data();
-  return std::visit(NextPacketVisitor{au, current_.length, ssrc, h264_params_, h265_params_}, cursor_);
+  // Thin lambda: the only per-codec part is which packetizer walks the AU
+  // and which parameter set it reads.
+  return std::visit(
+      [&](auto& cursor) {
+        using Cursor = std::decay_t<decltype(cursor)>;
+        if constexpr (std::is_same_v<Cursor, ClientCursor>) {
+          return H264Packetizer::Next(au, current_.length, h264_params_, cursor, ssrc);
+        } else {
+          return H265Packetizer::Next(au, current_.length, h265_params_, cursor, ssrc);
+        }
+      },
+      cursor_);
 }
 
 void MediaSender::DropToAwaitIdr() noexcept {
@@ -207,15 +240,29 @@ void MediaSender::SetSlowBps(uint32_t bps, uint64_t now_ns) noexcept {
 }
 
 uint16_t MediaSender::CursorSeq() const noexcept {
-  return std::visit(CursorSeqVisitor{}, cursor_);
+  // Fully common: the sequence number lives in the shared base.
+  return std::visit([](const auto& cursor) { return cursor.seq; }, cursor_);
 }
 
 uint32_t MediaSender::CursorTs() const noexcept {
-  return std::visit(CursorTsVisitor{}, cursor_);
+  // Fully common: the timestamp lives in the shared base.
+  return std::visit([](const auto& cursor) { return cursor.ts; }, cursor_);
 }
 
 void MediaSender::StartCursor(uint32_t au_len, uint32_t ts, bool inject_params, uint16_t next_seq) noexcept {
-  std::visit(StartCursorVisitor{next_seq, ts, au_len, inject_params}, cursor_);
+  // Common: the shared progress fields. Thin lambda: the codec's own
+  // parameter-set staging is the only per-codec part.
+  std::visit(
+      [&](auto& cursor) {
+        using Cursor = std::decay_t<decltype(cursor)>;
+        StartCommonFields(cursor, next_seq);
+        if constexpr (std::is_same_v<Cursor, ClientCursor>) {
+          H264Packetizer::StartAu(cursor, au_len, ts, inject_params);
+        } else {
+          H265Packetizer::StartAu(cursor, au_len, ts, inject_params);
+        }
+      },
+      cursor_);
 }
 
 MediaSender::Snapshot MediaSender::GetSnapshot(uint64_t now_ns) const noexcept {

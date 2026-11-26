@@ -67,18 +67,29 @@ enum class PacketizeError : uint8_t {
 // True when the AU contains an IDR slice (and a prefix start code is valid).
 [[nodiscard]] bool AuHasIdr(const uint8_t* au, uint32_t au_len) noexcept;
 
-// Per-client packetization progress. Owned by the session; loop-thread only.
-struct ClientCursor {
+// Packetization progress fields that H.264 and H.265 share: same names,
+// same types, same meaning. The codec-specific parts are the parameter-set
+// staging counter (param_stage) and the FU header layout, so those live in
+// the derived cursors.
+//
+// Keeping the shared fields in one base is what lets the common cursor
+// logic in media_sender.cpp be plain (non-template) functions: they take a
+// PacketizeCursor& and no per-codec overload is needed.
+struct PacketizeCursor {
   uint32_t nal_offset = 0U;   // Offset of the current NAL start code in the AU.
   uint32_t frag_offset = 0U;  // Bytes of the current NAL already packetized.
   uint32_t au_len = 0U;
   uint16_t seq = 0U;
   uint32_t ts = 0U;
-  uint8_t param_stage = 2U;  // 0 = send SPS, 1 = send PPS, 2 = done.
   bool await_idr = true;
   bool in_au = false;
   bool marker_sent = false;
   std::array<uint8_t, kRtpHeaderBytes> rtp_header{};
+};
+
+// Per-client packetization progress. Owned by the session; loop-thread only.
+struct ClientCursor : PacketizeCursor {
+  uint8_t param_stage = 2U;  // 0 = send SPS, 1 = send PPS, 2 = done.
   // FU-A indicator/header only (2 bytes used); the fragment bytes stay in the
   // shared AU and are exposed through RtpPacket::payload.
   std::array<uint8_t, 3U> fu_header{};

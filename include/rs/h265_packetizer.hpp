@@ -65,17 +65,10 @@ struct HevcParamSets {
 [[nodiscard]] bool HevcAuHasIrap(const uint8_t* au, uint32_t au_len) noexcept;
 
 // Per-client HEVC packetization progress (loop thread only).
-struct HevcCursor {
-  uint32_t nal_offset = 0U;
-  uint32_t frag_offset = 0U;
-  uint32_t au_len = 0U;
-  uint16_t seq = 0U;
-  uint32_t ts = 0U;
+// The shared progress fields come from PacketizeCursor; only the
+// parameter-set staging and the FU header layout are H.265 specific.
+struct HevcCursor : PacketizeCursor {
   uint8_t param_stage = 3U;  // 0 = VPS, 1 = SPS, 2 = PPS, 3 = done.
-  bool await_idr = true;
-  bool in_au = false;
-  bool marker_sent = false;
-  std::array<uint8_t, kRtpHeaderBytes> rtp_header{};
   // FU header only (3 bytes: two-byte payload header + FU header); fragment
   // bytes stay in the shared AU.
   std::array<uint8_t, 3U> fu_header{};

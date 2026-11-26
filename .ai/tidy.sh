@@ -49,10 +49,14 @@ fi
 
 if $NEED_CONFIGURE; then
   echo "Configuring $BUILD_DIR ..."
-  CONFIGURE_LOG="/tmp/coact-tidy-configure.log"
+  CONFIGURE_LOG="/tmp/rs-tidy-configure.log"
+  # NEWOSP_DIR must be passed explicitly: the project refuses to configure
+  # without it, and its default points at ../newosp, which is not where a CI
+  # checkout puts it.
   if ! cmake -B "$BUILD_DIR" -S "$PROJECT_ROOT" \
       -DCMAKE_BUILD_TYPE=Debug \
       -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+      -DNEWOSP_DIR="${RS_NEWOSP_DIR:-$PROJECT_ROOT/../newosp}" \
       > "$CONFIGURE_LOG" 2>&1; then
     # The usual cause is a build dir left over from a checkout at a different
     # path: its CMakeCache.txt pins the old source dir and cmake refuses to

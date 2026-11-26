@@ -213,9 +213,9 @@ bool VerifyExpectFile(const Ctx& ctx, std::string& err) {
       continue;
     }
     first_line = false;
-    unsigned au_index = 0U;
-    unsigned is_idr = 0U;
-    unsigned long long au_bytes = 0U;
+    uint32_t au_index = 0U;
+    uint32_t is_idr = 0U;
+    uint64_t au_bytes = 0U;
     char hash_text[32] = {};
     const int fields =
         std::sscanf(line.c_str(), "%" PRIu32 " %" PRIu32 " %" PRIu64 " %31s", &au_index, &is_idr, &au_bytes, hash_text);
@@ -227,7 +227,7 @@ bool VerifyExpectFile(const Ctx& ctx, std::string& err) {
       const bool want_idr = rse2e::HasIrap(ctx.file_aus[index], ctx.codec);
       const uint64_t hash = Fnv1a64(bytes.data(), bytes.size());
       char want_hash[32];
-      std::snprintf(want_hash, sizeof(want_hash), "%016llx", static_cast<uint64_t>(hash));
+      std::snprintf(want_hash, sizeof(want_hash), "%016" PRIx64, hash);
       ok = (au_bytes == bytes.size()) && ((0U != is_idr) == want_idr) && (0 == std::strcmp(hash_text, want_hash));
       if (!ok) {
         err = "expect line " + std::to_string(index) + " mismatch: file says " + std::to_string(au_bytes) + "/" +

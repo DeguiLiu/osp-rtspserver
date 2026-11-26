@@ -51,20 +51,23 @@ else
 fi
 
 # Step 3: Build
-# coact's tests and examples are always added by the root CMakeLists (it calls
-# enable_testing() and add_subdirectory unconditionally), so there is no
-# test/example option to pass here.
+# NEWOSP_DIR must be passed explicitly: the project refuses to configure
+# without it, and its default points at ../newosp, which is not where a CI
+# checkout puts it.
+NEWOSP_DIR="${RS_NEWOSP_DIR:-$PROJECT_ROOT/../newosp}"
 BUILD_DIR="$PROJECT_ROOT/build"
 if $SANITIZER; then
   BUILD_DIR="$PROJECT_ROOT/build-asan"
   run_step "CMake Configure (ASan+UBSan)" \
     cmake -B "$BUILD_DIR" -S "$PROJECT_ROOT" \
       -DCMAKE_BUILD_TYPE=Debug \
+      -DNEWOSP_DIR="$NEWOSP_DIR" \
       -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
 else
   run_step "CMake Configure" \
     cmake -B "$BUILD_DIR" -S "$PROJECT_ROOT" \
-      -DCMAKE_BUILD_TYPE=Debug
+      -DCMAKE_BUILD_TYPE=Debug \
+      -DNEWOSP_DIR="$NEWOSP_DIR"
 fi
 
 NPROC=$(nproc 2>/dev/null || echo 4)

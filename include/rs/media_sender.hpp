@@ -19,6 +19,11 @@
 
 namespace rs {
 
+// The per-client packetization cursor. Which alternative is active IS the
+// codec: the variant carries the H.264 or H.265 cursor, so no separate codec
+// flag has to be kept in sync with it.
+using CodecCursor = std::variant<ClientCursor, HevcCursor>;
+
 class MediaSender final {
  public:
   static constexpr uint32_t kFrameQueueDepth = 4U;
@@ -53,6 +58,8 @@ class MediaSender final {
   void ReleaseCurrent() noexcept;
   void FinishCurrent() noexcept { ReleaseCurrent(); }
   [[nodiscard]] osp::expected<RtpPacket, PacketizeError> NextPacket(uint32_t ssrc) noexcept;
+  [[nodiscard]] CodecCursor CursorState() const noexcept { return cursor_; }
+  void RestoreCursor(const CodecCursor& cursor) noexcept { cursor_ = cursor; }
   void DropToAwaitIdr() noexcept;
 
   [[nodiscard]] bool Admit(uint32_t bytes, uint64_t now_ns) noexcept;
@@ -70,7 +77,6 @@ class MediaSender final {
   [[nodiscard]] uint32_t RtpTs(uint64_t pts_ns) const noexcept;
 
   FrameIngress* ingress_ = nullptr;
-  Codec codec_ = Codec::kUnknown;
   ParamSets h264_params_{};
   HevcParamSets h265_params_{};
   TokenBucket client_bucket_;
@@ -86,7 +92,6 @@ class MediaSender final {
   bool has_current_ = false;
   bool need_idr_ = true;
 
-  using CodecCursor = std::variant<ClientCursor, HevcCursor>;
   CodecCursor cursor_{};
   uint64_t rtp_base_pts_ns_ = 0U;
   uint32_t rtp_base_ts_ = 0U;
