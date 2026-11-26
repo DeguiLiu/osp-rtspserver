@@ -157,3 +157,101 @@ jobs:
         env:
           TSAN_OPTIONS: halt_on_error=1
         run: setarch "$(uname -m)" -R ctest --test-dir build-tsan --output-on-failure
+
+  # aarch64 Linux: the second supported target platform (the first is
+  # x86-64). The job cross-compiles the whole tree and then EXECUTES the
+  # test binaries under qemu-user, so it catches target-ABI defects that a
+  # compile-only gate cannot: atomic lock-freedom, alignment assumptions
+  # (alignas(64) cache lines), size_t / pointer width and endianness.
+  #
+  # The compile half of this gate is what makes the "no atomic<uint64_t> on
+  # armhf" class of bug fail here instead of on a board.
+  arm-linux-aarch64:
+    name: arm-linux (aarch64, qemu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Checkout newosp
+        uses: actions/checkout@v5
+        with:
+          repository: DeguiLiu/newosp
+          ref: 3062194807113c8b139a0197786cbab9bd2638a7
+          path: newosp
+
+      - name: Install the aarch64 cross toolchain and qemu-user
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            g++-aarch64-linux-gnu gcc-aarch64-linux-gnu \
+            libc6-dev-arm64-cross linux-libc-dev-arm64-cross \
+            qemu-user
+
+      - name: Configure (aarch64 cross)
+        run: |
+          cmake -S . -B build-arm64 \
+            -DCMAKE_TOOLCHAIN_FILE=cmake/aarch64-linux-gnu.toolchain.cmake \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DNEWOSP_DIR="${{ github.workspace }}/newosp" \
+            -DRS_BUILD_E2E=OFF \
+            -DRS_ENABLE_DEBUG_SHELL=OFF \
+            -DRS_ENABLE_FAULT_INJECTION=OFF
+
+      - name: Build
+        run: cmake --build build-arm64 -j"$(nproc)"
+
+      # CMAKE_CROSSCOMPILING_EMULATOR in the toolchain file makes ctest run
+      # every test binary through qemu-aarch64.
+      - name: Test under qemu-aarch64
+        run: ctest --test-dir build-arm64 --output-on-failure
+
+      - name: Report the target architecture
+        run: |
+          # A silent fallback to the host compiler would make this job green
+          # while testing x86 binaries. Prove the artifacts are aarch64.
+          file build-arm64/rtspserver_demo
+          if ! file build-arm64/rtspserver_demo | grep -q "ARM aarch64"; then
+            echo "FAIL: rtspserver_demo was not built for aarch64" >&2
+            exit 1
+          fi
+
+      # The zero-heap contract, checked on the target architecture. On armhf a
+      # 64-bit atomic silently falls back to libatomic (a lock plus a heap
+      # allocation), which this audit is designed to catch.
+      - name: Zero-heap symbol audit
+        run: bash test/elf_audit.sh aarch64-linux-gnu-nm build-arm64/CMakeFiles/rs_core.dir/src/*.o
+
+  # Format, lint and static-analysis gate. coact keeps these in .ai/ scripts
+  # that only run locally; osp-rtspserver runs them in CI so the gate cannot
+  # rot into a tool nobody executes.
+  static-analysis:
+    name: format + lint + tidy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Checkout newosp
+        uses: actions/checkout@v5
+        with:
+          repository: DeguiLiu/newosp
+          ref: 3062194807113c8b139a0197786cbab9bd2638a7
+          path: newosp
+
+      - name: Install the analysis tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang-format clang-tidy
+          python3 -m pip install --user cpplint
+
+      - name: clang-format
+        run: bash .ai/format.sh --check
+
+      - name: cpplint
+        run: bash .ai/lint.sh
+
+      - name: clang-tidy
+        run: bash .ai/tidy.sh

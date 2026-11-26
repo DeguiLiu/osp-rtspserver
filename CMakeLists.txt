@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
-project(rs_rtsp CXX)
+project(rs_rtsp
+        VERSION 0.1.0
+        DESCRIPTION "RTSP server for newosp: H.264/H.265 over RTP"
+        LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -65,7 +68,9 @@ add_library(rs_core STATIC
 target_include_directories(rs_core PUBLIC include)
 target_link_libraries(rs_core PUBLIC osp)
 target_compile_options(rs_core PRIVATE ${RS_WARN_FLAGS})
-target_compile_definitions(rs_core PUBLIC OSP_HAS_NETWORK=1)
+# The version comes from project(VERSION) so that CMake, the git tag and the
+# runtime string reported by the debug shell can never drift apart.
+target_compile_definitions(rs_core PUBLIC OSP_HAS_NETWORK=1 RS_VERSION="${PROJECT_VERSION}")
 if(RS_HAVE_NEWOSP_RDHUP)
   target_compile_definitions(rs_core PUBLIC RS_HAVE_NEWOSP_RDHUP=1)
 endif()
@@ -117,6 +122,27 @@ rs_add_test(test_ip_rate_limiter)
 rs_add_test(test_alignment)
 rs_add_test(test_rtp_transport)
 rs_add_test(test_track_params)
+
+# Negative compile contracts: these translation units MUST NOT compile.
+# EXCLUDE_FROM_ALL keeps them out of the default build; the WILL_FAIL ctest
+# builds the target on demand and turns the expected build failure into a
+# pass. The same trick as coact's src/event/CMakeLists.txt.
+#
+# The two contracts guarded here are the ones that protect every translation
+# unit in the library: no exceptions and no RTTI. A regression that drops
+# -fno-exceptions or -fno-rtti would otherwise go unnoticed until an
+# embedded target failed to link.
+function(rs_add_neg_test name)
+  add_library(${name} EXCLUDE_FROM_ALL STATIC tests/neg/${name}.cpp)
+  target_link_libraries(${name} PRIVATE rs_core)
+  target_compile_options(${name} PRIVATE ${RS_WARN_FLAGS})
+  add_test(NAME ${name}
+           COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target ${name})
+  set_tests_properties(${name} PROPERTIES WILL_FAIL TRUE)
+endfunction()
+
+rs_add_neg_test(exceptions_neg)
+rs_add_neg_test(rtti_neg)
 
 if(RS_BUILD_E2E)
   add_executable(test_e2e tests/test_e2e.cpp tests/e2e_client.cpp)

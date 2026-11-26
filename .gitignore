@@ -18,3 +18,7 @@ compile_commands.json
 
 # Local-only material: design notes stay on disk but are not published.
 docs/local/
+
+# Temporary symlink created by .ai/lint.sh (cpplint only reads CPPLINT.cfg
+# from an ancestor directory).
+/CPPLINT.cfg
