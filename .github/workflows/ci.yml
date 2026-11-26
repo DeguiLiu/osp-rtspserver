@@ -313,7 +313,7 @@ jobs:
       - name: Install the analysis tools
         run: |
           python3 -m pip install --user \
-            clang-format==21.1.8 clang-tidy==21.1.8 cpplint
+            clang-format==21.1.8 clang-tidy==21.1.6 cpplint
 
       - name: clang-format
         run: bash .ai/format.sh --check
