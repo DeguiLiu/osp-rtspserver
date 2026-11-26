@@ -128,7 +128,7 @@ bool CopyParamSets(const TrackParams& src, uint8_t* vps, uint8_t* sps, uint8_t* 
   if (src.vps_len > kMaxParamSetBytes || src.sps_len > kMaxParamSetBytes || src.pps_len > kMaxParamSetBytes) {
     return false;
   }
-  if (!ValidateParamSets(src)) {
+  if (ValidateParamSets(src) == false) {
     return false;
   }
   if (src.vps_len > 0U) {
@@ -178,7 +178,7 @@ void RtspServer::FillTcpInfo(Connection& c) noexcept {
 }
 
 bool DeferredCloseBatch::Mark(uint32_t slot) noexcept {
-  const bool ok = (slot < kCapacity) && !pending_[slot];
+  const bool ok = (slot < kCapacity) && pending_[slot] == false;
   if (ok) {
     pending_[slot] = true;
   }
@@ -203,7 +203,7 @@ void DeferredCloseBatch::Flush() noexcept {
 bool ConnectionTagValid(uintptr_t tag, uint32_t gen, bool active, bool closing) noexcept {
   const uint32_t slot = static_cast<uint32_t>(tag & kSlotMask);
   const uint32_t tag_gen = static_cast<uint32_t>(tag >> kSlotBits);
-  return active && !closing && slot < kMaxConnections && tag_gen == gen && tag_gen < kMaxGen;
+  return active && closing == false && slot < kMaxConnections && tag_gen == gen && tag_gen < kMaxGen;
 }
 
 RtspServer::RtspServer() noexcept {
@@ -222,7 +222,7 @@ RtspServer::~RtspServer() noexcept {
 
 bool RtspServer::OpenListener() noexcept {
   auto created = osp::TcpListener::Create();
-  if (!created.has_value()) {
+  if (created.has_value() == false) {
     return false;
   }
   listener_ = std::move(created.value());
@@ -232,13 +232,13 @@ bool RtspServer::OpenListener() noexcept {
   static_cast<void>(
       osp::socket_api::SetSockOpt(fd, SOL_SOCKET, SO_REUSEADDR, &one, static_cast<socklen_t>(sizeof(one))));
   auto addr = osp::SocketAddress::FromIpv4("0.0.0.0", cfg_.port);
-  if (!addr.has_value()) {
+  if (addr.has_value() == false) {
     return false;
   }
-  if (!listener_.Bind(addr.value()).has_value()) {
+  if (listener_.Bind(addr.value()).has_value() == false) {
     return false;
   }
-  if (!listener_.Listen(static_cast<int32_t>(kListenBacklog)).has_value()) {
+  if (listener_.Listen(static_cast<int32_t>(kListenBacklog)).has_value() == false) {
     return false;
   }
   if (osp::SetFdNonBlocking(fd, true) < 0) {
@@ -264,7 +264,7 @@ osp::expected<void, ServerError> RtspServer::Start(const ServerConfig& cfg) noex
   if (cfg.advertise_ip == nullptr || cfg.port == 0U || cfg.max_clients == 0U || cfg.max_clients > kMaxConnections) {
     return osp::expected<void, ServerError>::error(ServerError::kInvalidConfig);
   }
-  if (!svc::Hsm::TablesValid() || !sess::Hsm::TablesValid()) {
+  if (svc::Hsm::TablesValid() == false || sess::Hsm::TablesValid() == false) {
     return osp::expected<void, ServerError>::error(ServerError::kBackendFailed);
   }
   cfg_ = cfg;
@@ -283,7 +283,7 @@ osp::expected<void, ServerError> RtspServer::Start(const ServerConfig& cfg) noex
   // RAII: every failure path below releases the listener exactly once; only
   // the fully started server dismisses the guard.
   osp::ScopeGuard start_guard{osp::FixedFunction<void()>{[this]() noexcept { ReleaseStartHandles(); }}};
-  if (!CopyParamSets(cfg_.params, vps_, sps_, pps_, params_)) {
+  if (CopyParamSets(cfg_.params, vps_, sps_, pps_, params_) == false) {
     return osp::expected<void, ServerError>::error(ServerError::kInvalidConfig);
   }
   codec_ = params_.codec;
@@ -294,31 +294,31 @@ osp::expected<void, ServerError> RtspServer::Start(const ServerConfig& cfg) noex
   stats_.sps_len = params_.sps_len;
   stats_.pps_len = params_.pps_len;
   PublishStats();
-  if (!IsValid()) {
+  if (IsValid() == false) {
     return osp::expected<void, ServerError>::error(ServerError::kBackendFailed);
   }
-  if (!OpenListener()) {
+  if (OpenListener() == false) {
     return osp::expected<void, ServerError>::error(ServerError::kBackendFailed);
   }
-  if (!AddFd(listener_fd_, kReadInterest, kListenerTag).has_value()) {
+  if (AddFd(listener_fd_, kReadInterest, kListenerTag).has_value() == false) {
     return osp::expected<void, ServerError>::error(ServerError::kBackendFailed);
   }
   listener_armed_ = true;
   auto timer = Schedule(kMaintenancePeriodMs);
-  if (!timer.has_value()) {
+  if (timer.has_value() == false) {
     return osp::expected<void, ServerError>::error(ServerError::kBackendFailed);
   }
   maint_timer_ = timer.value();
 
   svc_ctx_.listener_ready = true;
-  if (!svc_hsm_.Dispatch(svc::kStartReady) || !svc_ctx_.start_ok) {
+  if (svc_hsm_.Dispatch(svc::kStartReady) == false || svc_ctx_.start_ok == false) {
     return osp::expected<void, ServerError>::error(ServerError::kBackendFailed);
   }
 
   ClearStop();
   stop_requested_.store(false, std::memory_order_release);
   running_.store(true, std::memory_order_release);
-  if (!StartThreads()) {
+  if (StartThreads() == false) {
     running_.store(false, std::memory_order_release);
     static_cast<void>(svc_hsm_.Dispatch(svc::kStartFail));
     return osp::expected<void, ServerError>::error(ServerError::kBackendFailed);
@@ -357,7 +357,7 @@ void RtspServer::LoopThreadMain() noexcept {
 }
 
 void RtspServer::Stop() noexcept {
-  if (!running_.load(std::memory_order_acquire)) {
+  if (running_.load(std::memory_order_acquire) == false) {
     return;
   }
   stop_requested_.store(true, std::memory_order_release);
@@ -391,12 +391,12 @@ void RtspServer::Stop() noexcept {
 }
 
 osp::expected<void, ServerError> RtspServer::UpdateTrackParams(const TrackParams& params) noexcept {
-  if (!running_.load(std::memory_order_acquire) || stop_requested_.load(std::memory_order_acquire)) {
+  if (running_.load(std::memory_order_acquire) == false || stop_requested_.load(std::memory_order_acquire)) {
     return osp::expected<void, ServerError>::error(ServerError::kNotRunning);
   }
   {
     std::lock_guard<std::mutex> lock(params_mutex_);
-    if (!CopyParamSets(params, pending_vps_, pending_sps_, pending_pps_, pending_params_)) {
+    if (CopyParamSets(params, pending_vps_, pending_sps_, pending_pps_, pending_params_) == false) {
       return osp::expected<void, ServerError>::error(ServerError::kInvalidParams);
     }
     params_pending_ = true;
@@ -408,7 +408,7 @@ osp::expected<void, ServerError> RtspServer::UpdateTrackParams(const TrackParams
 void RtspServer::ApplyPendingParams(uint64_t now) noexcept {
   {
     std::lock_guard<std::mutex> lock(params_mutex_);
-    if (!params_pending_) {
+    if (params_pending_ == false) {
       return;
     }
     std::memcpy(vps_, pending_vps_, pending_params_.vps_len);
@@ -461,7 +461,7 @@ bool RtspServer::PostShellCommand(const ShellCommand& command) noexcept {
   if (stop_requested_.load(std::memory_order_acquire)) {
     return false;
   }
-  if (!shell_cmds_.Push(command)) {
+  if (shell_cmds_.Push(command) == false) {
     return false;
   }
   Wake();
@@ -495,7 +495,7 @@ void RtspServer::ErrorThunk(void* ctx, uint32_t error) noexcept {
 
 int32_t RtspServer::FindFreeSlot() const noexcept {
   for (uint32_t i = 0U; i < kMaxConnections; ++i) {
-    if (!conn_[i].active) {
+    if (conn_[i].active == false) {
       return static_cast<int32_t>(i);
     }
   }
@@ -524,7 +524,7 @@ void RtspServer::OnListenerReadable(uint64_t now) noexcept {
   // Accept is the only place a freed fd number can be recycled, so drain the
   // deferred closes of the previous dispatch batch before looking for peers.
   pending_close_.Flush();
-  if (!listener_armed_ || now < accept_retry_ns_) {
+  if (listener_armed_ == false || now < accept_retry_ns_) {
     return;
   }
   for (uint32_t round = 0U; round < kMaxConnections; ++round) {
@@ -534,7 +534,7 @@ void RtspServer::OnListenerReadable(uint64_t now) noexcept {
 #else
     auto accepted = listener_.Accept(peer);
 #endif
-    if (!accepted.has_value()) {
+    if (accepted.has_value() == false) {
       if (errno == EMFILE || errno == ENFILE) {
         // Remove the level-triggered listener instead of re-entering accept()
         // on every poll: the maintenance tick re-arms it after the backoff.
@@ -546,7 +546,7 @@ void RtspServer::OnListenerReadable(uint64_t now) noexcept {
     }
     osp::TcpSocket sock = std::move(accepted.value());
     const uint32_t peer_ipv4 = HostIpv4(peer);
-    if (!ip_limiter_.AllowAccept(peer_ipv4, now)) {
+    if (ip_limiter_.AllowAccept(peer_ipv4, now) == false) {
       ++stats_.accept_rate_limited;
       sock.Close();
       continue;
@@ -591,7 +591,7 @@ void RtspServer::OnListenerReadable(uint64_t now) noexcept {
     const uintptr_t tag =
         static_cast<uintptr_t>(static_cast<uint32_t>(slot)) | (static_cast<uintptr_t>(c.gen) << kSlotBits);
     const int32_t fd = static_cast<int32_t>(c.sock.Fd());
-    if (!AddFd(fd, c.interest, tag).has_value()) {
+    if (AddFd(fd, c.interest, tag).has_value() == false) {
       ++stats_.accept_failed;
       c.sock.Close();
       c.active = false;
@@ -608,13 +608,13 @@ void RtspServer::OnConnectionEvent(uint32_t slot, uint8_t events, uint64_t now) 
   Connection& c = conn_[slot];
   if ((events & kWritable) != 0U) {
     FlushConnection(slot, now);
-    if (!c.active || c.closing) {
+    if (c.active == false || c.closing) {
       return;
     }
   }
   if ((events & kReadable) != 0U) {
     ReadConnection(slot, now);
-    if (!c.active || c.closing) {
+    if (c.active == false || c.closing) {
       return;
     }
   } else if ((events & (kError | kHangup | kRdhup)) != 0U) {
@@ -627,7 +627,7 @@ void RtspServer::OnConnectionEvent(uint32_t slot, uint8_t events, uint64_t now) 
   }
   c.session.Pump(now);
   FlushConnection(slot, now);
-  if (c.active && !c.closing) {
+  if (c.active && c.closing == false) {
     UpdateInterest(slot);
   }
 }
@@ -636,7 +636,7 @@ void RtspServer::ReadConnection(uint32_t slot, uint64_t now) noexcept {
   Connection& c = conn_[slot];
   for (uint32_t round = 0U; round < 4U; ++round) {
     auto got = c.sock.Recv(rx_, sizeof(rx_));
-    if (!got.has_value()) {
+    if (got.has_value() == false) {
       if (got.get_error() == osp::SocketError::kWouldBlock) {
         return;
       }
@@ -653,13 +653,13 @@ void RtspServer::ReadConnection(uint32_t slot, uint64_t now) noexcept {
     ctx.now_ns = now;
     const ParserCallbacks cb{&ctx, &RtspServer::RequestThunk, &RtspServer::InterleavedThunk};
     auto fed = c.parser.Feed(rx_, static_cast<uint32_t>(got.value()), cb);
-    if (!fed.has_value() || ctx.close) {
+    if (fed.has_value() == false || ctx.close) {
       // F-06/F-12: malformed, oversized or unknown interleaved channel.
       CloseConnection(slot, kCloseProtocolError, now);
       return;
     }
     FlushConnection(slot, now);
-    if (!c.active || c.closing) {
+    if (c.active == false || c.closing) {
       return;
     }
     if (got.value() < static_cast<int32_t>(sizeof(rx_))) {
@@ -673,13 +673,13 @@ void RtspServer::FlushConnection(uint32_t slot, uint64_t now) noexcept {
   if (now < c.stall_until_ns) {
     return;
   }
-  while (c.active && !c.closing) {
+  while (c.active && c.closing == false) {
     const osp::byte_span pending = c.session.PendingTx();
     if (pending.size() == 0U) {
       break;
     }
     auto sent = c.sock.Send(pending);
-    if (!sent.has_value()) {
+    if (sent.has_value() == false) {
       if (sent.get_error() == osp::SocketError::kWouldBlock) {
         ++stats_.would_block;
         break;
@@ -717,7 +717,7 @@ void RtspServer::UpdateInterest(uint32_t slot) noexcept {
 
 void RtspServer::CloseConnection(uint32_t slot, CloseReason reason, uint64_t now) noexcept {
   Connection& c = conn_[slot];
-  if (!c.active || c.closing) {
+  if (c.active == false || c.closing) {
     return;
   }
   ClearUdpWatch(slot);
@@ -766,7 +766,7 @@ void RtspServer::SyncUdpWatch(uint32_t slot) noexcept {
   }
   Connection& c = conn_[slot];
   UdpWatch& w = udp_watch_[slot];
-  const int32_t fd = c.active && !c.closing ? c.session.RtcpFd() : -1;
+  const int32_t fd = c.active && c.closing == false ? c.session.RtcpFd() : -1;
   if (fd < 0) {
     ClearUdpWatch(slot);
     return;
@@ -794,17 +794,17 @@ void RtspServer::OnRtcpReadable(uint32_t slot, int32_t fd, uint64_t now) noexcep
   }
   UdpWatch& w = udp_watch_[slot];
   Connection& c = conn_[slot];
-  if (!w.active || w.fd != fd || !c.active || c.closing || c.gen != w.gen) {
+  if (w.active == false || w.fd != fd || c.active == false || c.closing || c.gen != w.gen) {
     return;
   }
-  if (!c.session.ReadRtcp(now)) {
+  if (c.session.ReadRtcp(now) == false) {
     CloseConnection(slot, c.session.Reason(), now);
   }
 }
 
 void RtspServer::FinishClose(uint32_t slot) noexcept {
   Connection& c = conn_[slot];
-  if (!c.active) {
+  if (c.active == false) {
     return;
   }
   c.sock.Close();
@@ -821,7 +821,7 @@ void RtspServer::CloseThunk(void* ctx, uint32_t slot) noexcept {
 
 void RtspServer::DispatchRequest(FeedCtx& ctx, const RtspRequest& req) noexcept {
   Connection& c = conn_[ctx.slot];
-  if (!ip_limiter_.AllowRequest(c.peer_ipv4, ctx.now_ns)) {
+  if (ip_limiter_.AllowRequest(c.peer_ipv4, ctx.now_ns) == false) {
     ++stats_.request_rate_limited;
     ctx.close = true;
     return;
@@ -837,7 +837,7 @@ void RtspServer::DispatchRequest(FeedCtx& ctx, const RtspRequest& req) noexcept 
 
 void RtspServer::DispatchInterleaved(FeedCtx& ctx, const InterleavedFrame& frame) noexcept {
   Connection& c = conn_[ctx.slot];
-  if (!c.session.OnInterleaved(frame.channel, frame.payload, ctx.now_ns)) {
+  if (c.session.OnInterleaved(frame.channel, frame.payload, ctx.now_ns) == false) {
     ctx.close = true;
   }
 }
@@ -860,7 +860,7 @@ void RtspServer::NotifyInputGap() noexcept {
   const uint64_t now = osp::SteadyNowNs();
   for (uint32_t i = 0U; i < kMaxConnections; ++i) {
     Connection& c = conn_[i];
-    if (c.active && !c.closing && c.session.Playing()) {
+    if (c.active && c.closing == false && c.session.Playing()) {
       c.session.OnInputGap(now);
     }
   }
@@ -869,11 +869,11 @@ void RtspServer::NotifyInputGap() noexcept {
 void RtspServer::DrainIngress(uint64_t now) noexcept {
   FrameDesc desc;
   for (uint32_t n = 0U; n < kInputQueueDepth * 2U; ++n) {
-    if (!ingress_.Pop(desc)) {
+    if (ingress_.Pop(desc) == false) {
       break;
     }
     ++stats_.au_in;
-    if (!ingress_.Validate(desc)) {
+    if (ingress_.Validate(desc) == false) {
       ++stats_.frame_pool_drop;
       ingress_.Release(desc);
       continue;
@@ -888,12 +888,12 @@ void RtspServer::DrainIngress(uint64_t now) noexcept {
     last_input_seq_ = desc.input_seq;
     for (uint32_t i = 0U; i < kMaxConnections; ++i) {
       Connection& c = conn_[i];
-      if (!c.active || c.closing || !c.session.Playing()) {
+      if (c.active == false || c.closing || c.session.Playing() == false) {
         continue;
       }
       const bool waiting = c.session.AwaitingRtpInfo();
       c.session.OnFrame(desc, now);
-      if (waiting && !c.session.AwaitingRtpInfo()) {
+      if (waiting && c.session.AwaitingRtpInfo() == false) {
         ++stats_.idr_waits;
       }
     }
@@ -905,12 +905,12 @@ void RtspServer::DrainIngress(uint64_t now) noexcept {
 void RtspServer::PumpAll(uint64_t now) noexcept {
   for (uint32_t i = 0U; i < kMaxConnections; ++i) {
     Connection& c = conn_[i];
-    if (!c.active || c.closing || now < c.stall_until_ns) {
+    if (c.active == false || c.closing || now < c.stall_until_ns) {
       continue;
     }
     c.session.Pump(now);
     FlushConnection(i, now);
-    if (c.active && !c.closing) {
+    if (c.active && c.closing == false) {
       UpdateInterest(i);
     }
   }
@@ -931,7 +931,7 @@ void RtspServer::OnWake() noexcept {
 }
 
 void RtspServer::RunMaintenance(uint64_t now) noexcept {
-  if (!listener_armed_ && listener_fd_ >= 0 && now >= accept_retry_ns_) {
+  if (listener_armed_ == false && listener_fd_ >= 0 && now >= accept_retry_ns_) {
     if (AddFd(listener_fd_, kReadInterest, kListenerTag).has_value()) {
       listener_armed_ = true;
     }
@@ -939,21 +939,21 @@ void RtspServer::RunMaintenance(uint64_t now) noexcept {
   stats_.sessions_playing = 0U;
   for (uint32_t i = 0U; i < kMaxConnections; ++i) {
     Connection& c = conn_[i];
-    if (!c.active || c.closing || now < c.stall_until_ns) {
+    if (c.active == false || c.closing || now < c.stall_until_ns) {
       continue;
     }
     // L-09: a connection that made no progress for 10 s (no request, no
     // response, no media) is closed; this is not "10 s since accept".
-    if (!c.session.Active() && (now - c.session.LastActivityNs()) > kIdleConnectNs) {
+    if (c.session.Active() == false && (now - c.session.LastActivityNs()) > kIdleConnectNs) {
       CloseConnection(i, kCloseSessionTimeout, now);
       continue;
     }
-    if (!c.session.OnTick(now)) {
+    if (c.session.OnTick(now) == false) {
       CloseConnection(i, c.session.Reason(), now);
       continue;
     }
     FlushConnection(i, now);
-    if (c.active && !c.closing) {
+    if (c.active && c.closing == false) {
       UpdateInterest(i);
       if (c.session.Playing()) {
         ++stats_.sessions_playing;
@@ -1000,15 +1000,15 @@ void RtspServer::ComputePercentiles() noexcept {
   bool got99 = false;
   for (uint32_t i = 0U; i < kLatencyBuckets; ++i) {
     acc += lat_hist_[i];
-    if (!got50 && acc >= p50) {
+    if (got50 == false && acc >= p50) {
       stats_.loop_p50_us = i;
       got50 = true;
     }
-    if (!got95 && acc >= p95) {
+    if (got95 == false && acc >= p95) {
       stats_.loop_p95_us = i;
       got95 = true;
     }
-    if (!got99 && acc >= p99) {
+    if (got99 == false && acc >= p99) {
       stats_.loop_p99_us = i;
       got99 = true;
     }
@@ -1022,12 +1022,12 @@ void RtspServer::ComputePercentiles() noexcept {
 void RtspServer::DrainShellCommands(uint64_t now) noexcept {
   ShellCommand cmd;
   for (uint32_t i = 0U; i < 8U; ++i) {
-    if (!shell_cmds_.Pop(cmd)) {
+    if (shell_cmds_.Pop(cmd) == false) {
       break;
     }
     switch (cmd.id) {
       case ShellCommandId::kKick:
-        if (cmd.arg0 < kMaxConnections && conn_[cmd.arg0].active && !conn_[cmd.arg0].closing) {
+        if (cmd.arg0 < kMaxConnections && conn_[cmd.arg0].active && conn_[cmd.arg0].closing == false) {
           CloseConnection(cmd.arg0, kCloseAdminKick, now);
         } else {
           ++stats_.shell_rejects;
@@ -1051,7 +1051,7 @@ void RtspServer::DrainShellCommands(uint64_t now) noexcept {
         }
         break;
       case ShellCommandId::kRequestIdr:
-        if (!idr_hooks_.Request(now, true)) {
+        if (idr_hooks_.Request(now, true) == false) {
           ++stats_.shell_rejects;
         }
         break;
@@ -1176,10 +1176,10 @@ void RtspServer::PublishSnapshot() noexcept {
   uint32_t active_nonclosing = 0U;
   for (uint32_t i = 0U; i < kMaxConnections; ++i) {
     Connection& c = conn_[i];
-    if (!c.active) {
+    if (c.active == false) {
       continue;
     }
-    if (!c.closing) {
+    if (c.closing == false) {
       ++active_nonclosing;
     }
     ClientSnapshot& row = out.clients[out.client_count];

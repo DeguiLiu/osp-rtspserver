@@ -106,14 +106,14 @@ int TestInterleavedBoundaries() {
   // One byte more must be rejected before touching the buffer.
   RtpPacket over_pkt{header, sizeof(header), nullptr, 0U, payload.data(), 65536U - sizeof(header), true};
   auto over = WriteInterleaved(osp::writable_byte_span{out.data(), out.size()}, 0U, over_pkt);
-  RS_CHECK(!over.has_value());
+  RS_CHECK(over.has_value() == false);
   RS_CHECK(over.get_error() == TransportError::kTooLarge);
 
   // Insufficient output space.
   std::byte small[16] = {};
   RtpPacket small_pkt{header, sizeof(header), nullptr, 0U, payload.data(), 32U, true};
   auto no_space = WriteInterleaved(osp::writable_byte_span{small, sizeof(small)}, 0U, small_pkt);
-  RS_CHECK(!no_space.has_value());
+  RS_CHECK(no_space.has_value() == false);
   RS_CHECK(no_space.get_error() == TransportError::kTooLarge);
 
   // Interleaved channels are 8-bit: 2-3 is valid, 128+ is not (review P0-3).
@@ -121,23 +121,23 @@ int TestInterleavedBoundaries() {
   RS_CHECK(channel_two.has_value());
   RS_CHECK_EQ(static_cast<uint8_t>(out[1]), static_cast<uint8_t>(2U));
   auto bad_channel = WriteInterleaved(osp::writable_byte_span{out.data(), out.size()}, 128U, max_pkt);
-  RS_CHECK(!bad_channel.has_value());
+  RS_CHECK(bad_channel.has_value() == false);
   RtpPacket empty_pkt{header, 0U, nullptr, 0U, nullptr, 0U, false};
   auto empty = WriteInterleaved(osp::writable_byte_span{out.data(), out.size()}, 0U, empty_pkt);
-  RS_CHECK(!empty.has_value());
+  RS_CHECK(empty.has_value() == false);
   RS_CHECK(empty.get_error() == TransportError::kTooLarge);
 
   // A prefix that pushes the frame one byte past 65535 must be rejected.
   const uint8_t prefix[2] = {0x7CU, 0x85U};
   RtpPacket fu_over{header, sizeof(header), prefix, sizeof(prefix), payload.data(), 65534U - sizeof(header), true};
   auto fu_over_result = WriteInterleaved(osp::writable_byte_span{out.data(), out.size()}, 0U, fu_over);
-  RS_CHECK(!fu_over_result.has_value());
+  RS_CHECK(fu_over_result.has_value() == false);
   RS_CHECK(fu_over_result.get_error() == TransportError::kTooLarge);
 
   // A wrapped 32-bit sum must never pass the capacity check.
   const RtpPacket wrapped{header, UINT32_MAX, prefix, 2U, payload.data(), 1U, false};
   auto wrapped_result = WriteInterleaved(osp::writable_byte_span{small, sizeof(small)}, 0U, wrapped);
-  RS_CHECK(!wrapped_result.has_value());
+  RS_CHECK(wrapped_result.has_value() == false);
   RS_CHECK(wrapped_result.get_error() == TransportError::kTooLarge);
 
   // Raw form boundaries.
@@ -145,14 +145,14 @@ int TestInterleavedBoundaries() {
   RS_CHECK(raw_max.has_value());
   RS_CHECK_EQ(raw_max.value(), 65539U);
   auto raw_over = WriteInterleavedRaw(osp::writable_byte_span{out.data(), out.size()}, 0U, payload.data(), 65536U);
-  RS_CHECK(!raw_over.has_value());
+  RS_CHECK(raw_over.has_value() == false);
   RS_CHECK(raw_over.get_error() == TransportError::kTooLarge);
   auto raw_zero = WriteInterleavedRaw(osp::writable_byte_span{out.data(), out.size()}, 0U, payload.data(), 0U);
-  RS_CHECK(!raw_zero.has_value());
+  RS_CHECK(raw_zero.has_value() == false);
   auto raw_channel = WriteInterleavedRaw(osp::writable_byte_span{out.data(), out.size()}, 7U, payload.data(), 8U);
   RS_CHECK(raw_channel.has_value());
   auto raw_bad_channel = WriteInterleavedRaw(osp::writable_byte_span{out.data(), out.size()}, 200U, payload.data(), 8U);
-  RS_CHECK(!raw_bad_channel.has_value());
+  RS_CHECK(raw_bad_channel.has_value() == false);
   return 0;
 }
 
@@ -160,20 +160,20 @@ int TestTxCommitBounds() {
   rs::TxStream tx;
   RS_CHECK(tx.Commit(rs::TxStream::kCapacity));
   RS_CHECK_EQ(tx.Unflushed(), rs::TxStream::kCapacity);
-  RS_CHECK(!tx.Commit(1U));
+  RS_CHECK(tx.Commit(1U) == false);
   RS_CHECK_EQ(tx.Unflushed(), rs::TxStream::kCapacity);
   tx.Consume(rs::TxStream::kCapacity, 1U);
   RS_CHECK(tx.Empty());
-  RS_CHECK(!tx.Commit(UINT32_MAX));
+  RS_CHECK(tx.Commit(UINT32_MAX) == false);
   RS_CHECK(tx.Empty());
   return 0;
 }
 
 int TestTokenBucket() {
   TokenBucket bucket;
-  RS_CHECK(!bucket.IsConfigured());
+  RS_CHECK(bucket.IsConfigured() == false);
   RS_CHECK_EQ(bucket.Available(0U), 0U);
-  RS_CHECK(!bucket.TryConsume(1U, 0U));
+  RS_CHECK(bucket.TryConsume(1U, 0U) == false);
 
   // 8 Mbit/s = 1 MB/s, burst 4096 bytes, starts full.
   bucket.Configure(8000000U, 4096U, 1000U);
@@ -181,14 +181,14 @@ int TestTokenBucket() {
   RS_CHECK_EQ(bucket.Available(1000U), 4096U);
   RS_CHECK(bucket.TryConsume(4096U, 1000U));
   RS_CHECK_EQ(bucket.Available(1000U), 0U);
-  RS_CHECK(!bucket.TryConsume(1U, 1000U));
+  RS_CHECK(bucket.TryConsume(1U, 1000U) == false);
   RS_CHECK_EQ(bucket.Available(1000U), 0U);
 
   // 1 ms of credit is 1000 bytes.
   const uint32_t after_1ms = bucket.Available(1001000U);
   RS_CHECK(after_1ms >= 999U);
   RS_CHECK(after_1ms <= 1000U);
-  RS_CHECK(!bucket.TryConsume(after_1ms + 1U, 1001000U));
+  RS_CHECK(bucket.TryConsume(after_1ms + 1U, 1001000U) == false);
   RS_CHECK_EQ(bucket.Available(1001000U), after_1ms);
 
   // Long idle time saturates at burst instead of overflowing.
@@ -236,10 +236,10 @@ int TestUdpLoopback() {
   const uint16_t rx_port = ntohs(local.sin_port);
 
   UdpRtpTransport transport;
-  RS_CHECK(!transport.IsOpen());
+  RS_CHECK(transport.IsOpen() == false);
   RtpPacket unopened{};
   auto not_configured = transport.SendRtp(unopened);
-  RS_CHECK(!not_configured.has_value());
+  RS_CHECK(not_configured.has_value() == false);
   RS_CHECK(not_configured.get_error() == TransportError::kNotConfigured);
 
   uint16_t local_rtp = 0U;
@@ -250,7 +250,7 @@ int TestUdpLoopback() {
   const uint8_t overflow_byte = 0U;
   const RtpPacket wrapped{&overflow_byte, UINT32_MAX, &overflow_byte, 2U, &overflow_byte, 1U, false};
   const auto wrapped_result = transport.SendRtp(wrapped);
-  RS_CHECK(!wrapped_result.has_value());
+  RS_CHECK(wrapped_result.has_value() == false);
   RS_CHECK(wrapped_result.get_error() == TransportError::kTooLarge);
   // RFC 3550 pair: RTP even, RTCP = RTP + 1 (review P0-2).
   RS_CHECK_EQ(local_rtcp, static_cast<uint16_t>(local_rtp + 1U));
@@ -306,11 +306,11 @@ int TestUdpLoopback() {
   RS_CHECK_EQ(std::memcmp(rx_buf, rtcp, sizeof(rtcp)), 0);
 
   auto too_big = transport.SendRtcp(rtcp, 65536U);
-  RS_CHECK(!too_big.has_value());
+  RS_CHECK(too_big.has_value() == false);
   RS_CHECK(too_big.get_error() == TransportError::kTooLarge);
 
   transport.Close();
-  RS_CHECK(!transport.IsOpen());
+  RS_CHECK(transport.IsOpen() == false);
   ::close(fd);
   return 0;
 }

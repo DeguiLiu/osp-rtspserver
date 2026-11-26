@@ -42,7 +42,7 @@ class RtcpEndpoint final {
                                 uint32_t& bad_count) noexcept {
     auto summary =
         ParseCompound(reinterpret_cast<const uint8_t*>(payload.data()), static_cast<uint32_t>(payload.size()));
-    if (!summary.has_value()) {
+    if (summary.has_value() == false) {
       ++bad_count;
       return false;
     }
@@ -74,7 +74,7 @@ class RtcpEndpoint final {
     std::snprintf(cname, sizeof(cname), "rs500@%s", (advertise_ip != nullptr) ? advertise_ip : "0.0.0.0");
     auto built = BuildSenderReportWithSdes(osp::writable_byte_span(reinterpret_cast<std::byte*>(buf), sizeof(buf)),
                                            ssrc, cname, wall_ns, rtp_ts, packet_count, octet_count_);
-    if (!built.has_value()) {
+    if (built.has_value() == false) {
       ++bad_count;
       next_sr_ns_ = now_ns + kNsPerMs * kMsPerSec;
       return;

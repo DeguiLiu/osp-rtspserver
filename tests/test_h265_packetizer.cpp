@@ -68,7 +68,7 @@ bool Collect(const uint8_t* au, uint32_t au_len, const rs::HevcParamSets& params
   bool ok = true;
   while (ok && (count < max)) {
     const auto r = rs::H265Packetizer::Next(au, au_len, params, cursor, ssrc);
-    if (!r.has_value()) {
+    if (r.has_value() == false) {
       ok = (rs::PacketizeError::kEndOfAu == r.get_error());
       break;
     } else {
@@ -135,9 +135,9 @@ int ExpectBadNal(const uint8_t* nal, uint32_t nal_len) {
   rs::HevcCursor cursor;
   rs::H265Packetizer::StartAu(cursor, au.len, 100U, false);
   const auto r = rs::H265Packetizer::Next(au.data, au.len, rs::HevcParamSets{}, cursor, 1U);
-  RS_CHECK(!r.has_value());
+  RS_CHECK(r.has_value() == false);
   RS_CHECK_EQ(r.get_error(), rs::PacketizeError::kBadNal);
-  RS_CHECK(!cursor.in_au);
+  RS_CHECK(cursor.in_au == false);
   return 0;
 }
 
@@ -171,7 +171,7 @@ int main() {
     RS_CHECK_EQ(unit.type, static_cast<uint8_t>(34U));  // PPS
     RS_CHECK_EQ(unit.data.size(), sizeof(pps));
     RS_CHECK_EQ(std::memcmp(unit.data.data(), pps, sizeof(pps)), 0);
-    RS_CHECK(!rs::NextHevcNalUnit(au.data, au.len, offset, unit));
+    RS_CHECK(rs::NextHevcNalUnit(au.data, au.len, offset, unit) == false);
     RS_CHECK_EQ(offset, au.len);
   }
 
@@ -188,7 +188,7 @@ int main() {
     RS_CHECK_EQ(unit.type, static_cast<uint8_t>(19U));
     RS_CHECK(rs::NextHevcNalUnit(au.data, au.len, offset, unit));
     RS_CHECK_EQ(unit.type, static_cast<uint8_t>(35U));
-    RS_CHECK(!rs::NextHevcNalUnit(au.data, au.len, offset, unit));
+    RS_CHECK(rs::NextHevcNalUnit(au.data, au.len, offset, unit) == false);
   }
 
   // No start code, a start code with no NAL, and a truncated AU.
@@ -196,17 +196,17 @@ int main() {
     const uint8_t random_bytes[] = {0x40, 0x01, 0x02, 0x03};
     uint32_t offset = 0U;
     rs::NalUnit unit;
-    RS_CHECK(!rs::NextHevcNalUnit(random_bytes, sizeof(random_bytes), offset, unit));
+    RS_CHECK(rs::NextHevcNalUnit(random_bytes, sizeof(random_bytes), offset, unit) == false);
     RS_CHECK_EQ(offset, sizeof(random_bytes));
     const uint8_t truncated[] = {0x00, 0x00, 0x01};
     offset = 0U;
-    RS_CHECK(!rs::NextHevcNalUnit(truncated, sizeof(truncated), offset, unit));
+    RS_CHECK(rs::NextHevcNalUnit(truncated, sizeof(truncated), offset, unit) == false);
     rs::HevcCursor cursor;
     rs::H265Packetizer::StartAu(cursor, sizeof(truncated), 100U, false);
     const auto r = rs::H265Packetizer::Next(truncated, sizeof(truncated), empty, cursor, 1U);
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::PacketizeError::kBadNal);
-    RS_CHECK(!cursor.in_au);
+    RS_CHECK(cursor.in_au == false);
   }
 
   // Invalid NAL headers are rejected: forbidden bit, TID 0, layer id, type.
@@ -253,9 +253,9 @@ int main() {
     RS_CHECK(p.payload == au.data + 4U);
     RS_CHECK_EQ(cursor.seq, static_cast<uint16_t>(0x1001U));
     const auto end = rs::H265Packetizer::Next(au.data, au.len, empty, cursor, 0xAABBCCDDU);
-    RS_CHECK(!end.has_value());
+    RS_CHECK(end.has_value() == false);
     RS_CHECK_EQ(end.get_error(), rs::PacketizeError::kEndOfAu);
-    RS_CHECK(!cursor.in_au);
+    RS_CHECK(cursor.in_au == false);
   }
 
   // 1201 bytes: first FU packet is full (3 + 1197), tail holds 2 bytes.
@@ -279,7 +279,7 @@ int main() {
     // Zero-copy: the fragment points into the AU right after the NAL header.
     RS_CHECK(packets[0].payload_ptr == au.data + 6U);
     RS_CHECK(packets[0].prefix_ptr == cursor.fu_header.data());
-    RS_CHECK(!packets[0].marker);
+    RS_CHECK(packets[0].marker == false);
     RS_CHECK_EQ(packets[1].body_len, 5U);
     RS_CHECK_EQ(packets[1].prefix_len, 3U);
     RS_CHECK_EQ(packets[1].payload_len, 2U);
@@ -329,8 +329,8 @@ int main() {
     RS_CHECK(packets[0].payload_ptr == au.data + 5U);
     RS_CHECK(packets[1].payload_ptr == au.data + 1202U);
     RS_CHECK(packets[2].payload_ptr == au.data + 2399U);
-    RS_CHECK(!packets[0].marker);
-    RS_CHECK(!packets[1].marker);
+    RS_CHECK(packets[0].marker == false);
+    RS_CHECK(packets[1].marker == false);
     RS_CHECK(packets[2].marker);
     uint8_t rebuilt[2600] = {};
     const uint32_t rebuilt_len = Reassemble(packets, count, rebuilt, sizeof(rebuilt));
@@ -398,13 +398,13 @@ int main() {
     RS_CHECK_EQ(count, 4U);
     RS_CHECK_EQ(packets[0].payload_len, sizeof(vps));
     RS_CHECK_EQ(std::memcmp(packets[0].payload, vps, sizeof(vps)), 0);
-    RS_CHECK(!packets[0].marker);
+    RS_CHECK(packets[0].marker == false);
     RS_CHECK_EQ(packets[1].payload_len, sizeof(sps));
     RS_CHECK_EQ(std::memcmp(packets[1].payload, sps, sizeof(sps)), 0);
-    RS_CHECK(!packets[1].marker);
+    RS_CHECK(packets[1].marker == false);
     RS_CHECK_EQ(packets[2].payload_len, sizeof(pps));
     RS_CHECK_EQ(std::memcmp(packets[2].payload, pps, sizeof(pps)), 0);
-    RS_CHECK(!packets[2].marker);
+    RS_CHECK(packets[2].marker == false);
     RS_CHECK_EQ(packets[3].payload_len, sizeof(idr));
     RS_CHECK(packets[3].marker);
     RS_CHECK_EQ(Seq(packets[0]), static_cast<uint16_t>(10U));
@@ -423,9 +423,9 @@ int main() {
     rs::HevcCursor cursor;
     rs::H265Packetizer::StartAu(cursor, au.len, 1U, true);
     const auto r = rs::H265Packetizer::Next(au.data, au.len, empty, cursor, 1U);
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::PacketizeError::kNotConfigured);
-    RS_CHECK(!cursor.in_au);
+    RS_CHECK(cursor.in_au == false);
     // VPS + SPS present, PPS missing: fails at the third stage.
     const rs::HevcParamSets no_pps = {vps, sizeof(vps), sps, sizeof(sps), nullptr, 0U};
     rs::HevcCursor partial;
@@ -435,9 +435,9 @@ int main() {
     const auto second = rs::H265Packetizer::Next(au.data, au.len, no_pps, partial, 1U);
     RS_CHECK(second.has_value());
     const auto third = rs::H265Packetizer::Next(au.data, au.len, no_pps, partial, 1U);
-    RS_CHECK(!third.has_value());
+    RS_CHECK(third.has_value() == false);
     RS_CHECK_EQ(third.get_error(), rs::PacketizeError::kNotConfigured);
-    RS_CHECK(!partial.in_au);
+    RS_CHECK(partial.in_au == false);
   }
 
   // kEndOfAu is idempotent and leaves no AU in progress.
@@ -454,9 +454,9 @@ int main() {
     RS_CHECK_EQ(count, 1U);
     for (uint32_t i = 0U; i < 2U; ++i) {
       const auto r = rs::H265Packetizer::Next(au.data, au.len, empty, cursor, 1U);
-      RS_CHECK(!r.has_value());
+      RS_CHECK(r.has_value() == false);
       RS_CHECK_EQ(r.get_error(), rs::PacketizeError::kEndOfAu);
-      RS_CHECK(!cursor.in_au);
+      RS_CHECK(cursor.in_au == false);
     }
   }
 
@@ -471,11 +471,11 @@ int main() {
     RS_CHECK_EQ(cursor.ts, 456U);
     RS_CHECK(cursor.in_au);
     RS_CHECK_EQ(cursor.param_stage, static_cast<uint8_t>(0));
-    RS_CHECK(!cursor.marker_sent);
+    RS_CHECK(cursor.marker_sent == false);
     rs::H265Packetizer::StartAu(cursor, 123U, 456U, false);
     RS_CHECK_EQ(cursor.param_stage, static_cast<uint8_t>(3));
     rs::H265Packetizer::ResetCursor(cursor);
-    RS_CHECK(!cursor.in_au);
+    RS_CHECK(cursor.in_au == false);
     RS_CHECK(cursor.await_idr);
     RS_CHECK_EQ(cursor.frag_offset, 0U);
     RS_CHECK_EQ(cursor.param_stage, static_cast<uint8_t>(3));
@@ -510,7 +510,7 @@ int main() {
       au.Nal(nal, sizeof(nal), true);
       RS_CHECK_EQ(rs::HevcAuHasIrap(au.data, au.len), expected[i]);
     }
-    RS_CHECK(!rs::HevcAuHasIrap(nullptr, 0U));
+    RS_CHECK(rs::HevcAuHasIrap(nullptr, 0U) == false);
   }
 
   return 0;

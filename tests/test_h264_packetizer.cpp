@@ -68,7 +68,7 @@ bool Collect(const uint8_t* au, uint32_t au_len, const rs::ParamSets& params, rs
   bool ok = true;
   while (ok && count < max) {
     const auto r = rs::H264Packetizer::Next(au, au_len, params, cursor, ssrc);
-    if (!r.has_value()) {
+    if (r.has_value() == false) {
       ok = (rs::PacketizeError::kEndOfAu == r.get_error());
       break;
     } else {
@@ -158,7 +158,7 @@ int main() {
     RS_CHECK_EQ(unit.type, static_cast<uint8_t>(5U));
     RS_CHECK_EQ(unit.data.size(), sizeof(nal5));
     RS_CHECK_EQ(std::memcmp(unit.data.data(), nal5, sizeof(nal5)), 0);
-    RS_CHECK(!rs::NextNalUnit(au.data, au.len, offset, unit));
+    RS_CHECK(rs::NextNalUnit(au.data, au.len, offset, unit) == false);
     RS_CHECK_EQ(offset, au.len);
     RS_CHECK(rs::AuHasIdr(au.data, au.len));
   }
@@ -168,8 +168,8 @@ int main() {
     uint8_t nal1[] = {0x41, 0x01, 0x02};
     AuBuilder au;
     au.Nal(nal1, sizeof(nal1), false);
-    RS_CHECK(!rs::AuHasIdr(au.data, au.len));
-    RS_CHECK(!rs::AuHasIdr(au.data, 0U));
+    RS_CHECK(rs::AuHasIdr(au.data, au.len) == false);
+    RS_CHECK(rs::AuHasIdr(au.data, 0U) == false);
   }
 
   // NAL type 0 is rejected by Next().
@@ -180,9 +180,9 @@ int main() {
     rs::ClientCursor cursor;
     rs::H264Packetizer::StartAu(cursor, au.len, 100U, false);
     const auto r = rs::H264Packetizer::Next(au.data, au.len, empty, cursor, 1U);
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::PacketizeError::kBadNal);
-    RS_CHECK(!cursor.in_au);
+    RS_CHECK(cursor.in_au == false);
   }
 
   // A start code with no NAL payload is truncated, not a valid empty NAL.
@@ -191,7 +191,7 @@ int main() {
     rs::ClientCursor cursor;
     rs::H264Packetizer::StartAu(cursor, sizeof(truncated), 100U, false);
     const auto r = rs::H264Packetizer::Next(truncated, sizeof(truncated), empty, cursor, 1U);
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::PacketizeError::kBadNal);
   }
 
@@ -223,9 +223,9 @@ int main() {
     RS_CHECK(p.payload == au.data + 4U);
     RS_CHECK_EQ(cursor.seq, static_cast<uint16_t>(0x1001U));
     const auto end = rs::H264Packetizer::Next(au.data, au.len, empty, cursor, 0xAABBCCDDU);
-    RS_CHECK(!end.has_value());
+    RS_CHECK(end.has_value() == false);
     RS_CHECK_EQ(end.get_error(), rs::PacketizeError::kEndOfAu);
-    RS_CHECK(!cursor.in_au);
+    RS_CHECK(cursor.in_au == false);
   }
 
   // 1201 bytes: one full FU-A fragment plus a two-byte tail.
@@ -248,7 +248,7 @@ int main() {
     // Zero-copy: the fragment points into the AU right after the NAL header.
     RS_CHECK(packets[0].payload_ptr == au.data + 5U);
     RS_CHECK(packets[0].prefix_ptr == cursor.fu_header.data());
-    RS_CHECK(!packets[0].marker);
+    RS_CHECK(packets[0].marker == false);
     RS_CHECK_EQ(packets[1].body_len, 4U);
     RS_CHECK_EQ(packets[1].prefix_len, 2U);
     RS_CHECK_EQ(packets[1].payload_len, 2U);
@@ -289,8 +289,8 @@ int main() {
     RS_CHECK(packets[0].payload_ptr == au.data + 4U);
     RS_CHECK(packets[1].payload_ptr == au.data + 1202U);
     RS_CHECK(packets[2].payload_ptr == au.data + 2400U);
-    RS_CHECK(!packets[0].marker);
-    RS_CHECK(!packets[1].marker);
+    RS_CHECK(packets[0].marker == false);
+    RS_CHECK(packets[1].marker == false);
     RS_CHECK(packets[2].marker);
     uint8_t rebuilt[2600] = {};
     const uint32_t rebuilt_len = Reassemble(packets, count, rebuilt, sizeof(rebuilt));
@@ -354,10 +354,10 @@ int main() {
     RS_CHECK_EQ(count, 3U);
     RS_CHECK_EQ(packets[0].payload_len, sizeof(sps));
     RS_CHECK_EQ(std::memcmp(packets[0].payload, sps, sizeof(sps)), 0);
-    RS_CHECK(!packets[0].marker);
+    RS_CHECK(packets[0].marker == false);
     RS_CHECK_EQ(packets[1].payload_len, sizeof(pps));
     RS_CHECK_EQ(std::memcmp(packets[1].payload, pps, sizeof(pps)), 0);
-    RS_CHECK(!packets[1].marker);
+    RS_CHECK(packets[1].marker == false);
     RS_CHECK_EQ(packets[2].payload_len, sizeof(idr));
     RS_CHECK(packets[2].marker);
     RS_CHECK_EQ(Seq(packets[0]), static_cast<uint16_t>(10U));
@@ -375,9 +375,9 @@ int main() {
     rs::ClientCursor cursor;
     rs::H264Packetizer::StartAu(cursor, au.len, 1U, true);
     const auto r = rs::H264Packetizer::Next(au.data, au.len, empty, cursor, 1U);
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::PacketizeError::kNotConfigured);
-    RS_CHECK(!cursor.in_au);
+    RS_CHECK(cursor.in_au == false);
   }
 
   // StartAu field contract and ResetCursor wait-for-IDR behaviour.
@@ -391,11 +391,11 @@ int main() {
     RS_CHECK_EQ(cursor.ts, 456U);
     RS_CHECK(cursor.in_au);
     RS_CHECK_EQ(cursor.param_stage, static_cast<uint8_t>(0));
-    RS_CHECK(!cursor.marker_sent);
+    RS_CHECK(cursor.marker_sent == false);
     rs::H264Packetizer::StartAu(cursor, 123U, 456U, false);
     RS_CHECK_EQ(cursor.param_stage, static_cast<uint8_t>(2));
     rs::H264Packetizer::ResetCursor(cursor);
-    RS_CHECK(!cursor.in_au);
+    RS_CHECK(cursor.in_au == false);
     RS_CHECK(cursor.await_idr);
     RS_CHECK_EQ(cursor.frag_offset, 0U);
     RS_CHECK_EQ(cursor.param_stage, static_cast<uint8_t>(2));

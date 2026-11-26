@@ -21,8 +21,8 @@ int TestServiceTables() {
   rs::svc::Context ctx;
   rs::svc::Hsm hsm(ctx);
   // Dispatch before Start is rejected.
-  RS_CHECK(!hsm.Dispatch(rs::svc::kStartReady));
-  RS_CHECK(!hsm.Started());
+  RS_CHECK(hsm.Dispatch(rs::svc::kStartReady) == false);
+  RS_CHECK(hsm.Started() == false);
   hsm.Start();
   hsm.Start();  // Duplicate Start is a no-op.
   RS_CHECK_EQ(hsm.State(), rs::svc::kInit);
@@ -39,7 +39,7 @@ int TestServiceHappyPath() {
   RS_CHECK(ctx.start_ok);
 
   // A second start from Ready has no arc.
-  RS_CHECK(!hsm.Dispatch(rs::svc::kStartReady));
+  RS_CHECK(hsm.Dispatch(rs::svc::kStartReady) == false);
   RS_CHECK_EQ(hsm.State(), rs::svc::kReady);
 
   RS_CHECK(hsm.Dispatch(rs::svc::kThreadStarted));
@@ -47,11 +47,11 @@ int TestServiceHappyPath() {
   RS_CHECK(hsm.Dispatch(rs::svc::kStopRequested));
   RS_CHECK_EQ(hsm.State(), rs::svc::kStopping);
   // A duplicate stop request from Stopping is rejected.
-  RS_CHECK(!hsm.Dispatch(rs::svc::kStopRequested));
+  RS_CHECK(hsm.Dispatch(rs::svc::kStopRequested) == false);
   RS_CHECK(hsm.Dispatch(rs::svc::kDrainDone));
   RS_CHECK_EQ(hsm.State(), rs::svc::kStopped);
   RS_CHECK(ctx.cleanup_done);
-  RS_CHECK(!hsm.Dispatch(rs::svc::kDrainDone));
+  RS_CHECK(hsm.Dispatch(rs::svc::kDrainDone) == false);
   return 0;
 }
 
@@ -62,7 +62,7 @@ int TestServiceGuardRejection() {
   ctx.listener_ready = false;  // Registration failed.
   RS_CHECK(hsm.Dispatch(rs::svc::kStartReady));
   RS_CHECK_EQ(hsm.State(), rs::svc::kFailed);
-  RS_CHECK(!ctx.start_ok);
+  RS_CHECK(ctx.start_ok == false);
   RS_CHECK(hsm.Dispatch(rs::svc::kDrainDone));
   RS_CHECK_EQ(hsm.State(), rs::svc::kStopped);
   return 0;
@@ -79,7 +79,7 @@ int TestServiceFatal() {
   RS_CHECK_EQ(hsm.State(), rs::svc::kFailed);
   RS_CHECK(ctx.fatal_seen);
   RS_CHECK_EQ(ctx.fatal_count, 1U);
-  RS_CHECK(!hsm.Dispatch(rs::svc::kThreadStarted));
+  RS_CHECK(hsm.Dispatch(rs::svc::kThreadStarted) == false);
   return 0;
 }
 
@@ -107,7 +107,7 @@ int TestSessionTables() {
   hsm.Start();
   RS_CHECK_EQ(hsm.State(), rs::sess::kInit);
   RS_CHECK(hsm.IsInState(rs::sess::kInit));
-  RS_CHECK(!hsm.IsInState(rs::sess::kActive));
+  RS_CHECK(hsm.IsInState(rs::sess::kActive) == false);
   return 0;
 }
 
@@ -117,7 +117,7 @@ int TestSessionSetupGuardAndRollback() {
   hsm.Start();
   // Guard refuses: no arc, state untouched.
   ctx.setup_ok = false;
-  RS_CHECK(!hsm.Dispatch(rs::sess::kSetupOk));
+  RS_CHECK(hsm.Dispatch(rs::sess::kSetupOk) == false);
   RS_CHECK_EQ(hsm.State(), rs::sess::kInit);
   RS_CHECK_EQ(ctx.rejects, 1U);
 
@@ -149,9 +149,9 @@ int TestSessionPlayAndTeardown() {
   RS_CHECK_EQ(hsm.State(), rs::sess::kPlaying);
 
   // Repeated PLAY is not a valid arc (455 at the request layer).
-  RS_CHECK(!hsm.Dispatch(rs::sess::kPlayOk));
+  RS_CHECK(hsm.Dispatch(rs::sess::kPlayOk) == false);
   // SETUP while Playing is not valid either.
-  RS_CHECK(!hsm.Dispatch(rs::sess::kSetupOk));
+  RS_CHECK(hsm.Dispatch(rs::sess::kSetupOk) == false);
   RS_CHECK_EQ(hsm.State(), rs::sess::kPlaying);
 
   RS_CHECK(hsm.Dispatch(rs::sess::kTeardown));

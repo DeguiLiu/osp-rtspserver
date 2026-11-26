@@ -149,7 +149,7 @@ int TestFaultSnapshot() {
   h.session.ResetCounters();
   const SessionSnapshot s2 = h.session.Snapshot(h.now);
   RS_CHECK_EQ(s2.slow_bps, 0U);
-  RS_CHECK(!s2.trace_enabled);
+  RS_CHECK(s2.trace_enabled == false);
   RS_CHECK_EQ(s2.counters.packets_sent, 0U);
   return 0;
 }
@@ -231,7 +231,7 @@ bool InterleavedReady() {
 
 bool PushAu(Harness& h, const uint8_t* au, uint32_t len, uint16_t flags, uint64_t pts_ns, FrameDesc& out) {
   auto w = h.ingress.Acquire(len);
-  if (!w.has_value()) {
+  if (w.has_value() == false) {
     return false;
   }
   FrameIngress::Writer writer = w.value();
@@ -239,7 +239,7 @@ bool PushAu(Harness& h, const uint8_t* au, uint32_t len, uint16_t flags, uint64_
   writer.desc.pts_ns = pts_ns;
   writer.desc.flags = flags;
   auto c = h.ingress.Commit(writer, len);
-  if (!c.has_value()) {
+  if (c.has_value() == false) {
     h.ingress.Abort(writer);
     return false;
   }
@@ -327,7 +327,7 @@ int TestSetupTcp() {
 }
 
 int TestSetupUdp() {
-  if (!UdpReady()) {
+  if (UdpReady() == false) {
     std::printf("test_rtsp_session: NOTE udp transport is a stub, UDP SETUP check skipped\n");
     return 0;
   }
@@ -412,7 +412,7 @@ int TestPlayNeedsIdrThenTimesOut() {
   RS_CHECK_EQ(ParseStatus(h), 0U);
 
   h.now += static_cast<uint64_t>(kPlayIdrTimeoutMs) * 1000000ULL + 1000000ULL;
-  RS_CHECK(!h.session.OnTick(h.now));
+  RS_CHECK(h.session.OnTick(h.now) == false);
   RS_CHECK(h.session.Closed());
   RS_CHECK(h.session.Reason() == kClosePlayIdrTimeout);
   return 0;
@@ -445,7 +445,7 @@ int TestPlayRtpInfoMatchesFirstPacket() {
   RS_CHECK(PushAu(h, kIdrAu, sizeof(kIdrAu), static_cast<uint16_t>(kFrameIdr | kFrameHasParams), 40000000ULL, idesc));
   h.session.OnFrame(idesc, h.now);
   h.ingress.Release(idesc);
-  RS_CHECK(!h.session.AwaitingRtpInfo());
+  RS_CHECK(h.session.AwaitingRtpInfo() == false);
   RS_CHECK_EQ(ParseStatus(h), 200U);
   RS_CHECK(HasText(h, "RTP-Info: url=rtsp://127.0.0.1:8554/live/trackID=0;seq="));
   RS_CHECK(HasText(h, ";rtptime="));
@@ -481,7 +481,7 @@ int TestPlayRtpInfoMatchesFirstPacket() {
   teardown.H("Session", id);
   RS_CHECK_EQ(h.Do(teardown), 200U);
   RS_CHECK_EQ(h.session.State(), sess::kInit);
-  RS_CHECK(!h.session.HasSession());
+  RS_CHECK(h.session.HasSession() == false);
   RS_CHECK_EQ(std::strlen(h.session.SessionId()), 0U);
   RS_CHECK(h.session.Transport() == TransportKind::kNone);
   h.Drain();
@@ -509,7 +509,7 @@ int TestInputGapAwaitsIdr() {
   RS_CHECK(PushAu(h, kIdrAu, sizeof(kIdrAu), static_cast<uint16_t>(kFrameIdr | kFrameHasParams), 1000000ULL, idesc));
   h.session.OnFrame(idesc, h.now);
   h.ingress.Release(idesc);
-  RS_CHECK(!h.session.AwaitingRtpInfo());
+  RS_CHECK(h.session.AwaitingRtpInfo() == false);
   h.Drain();
 
   const uint32_t gaps_before = h.session.Counters().input_gaps;
@@ -551,7 +551,7 @@ int TestRtcpSenderReportAndRr() {
   RS_CHECK(PushAu(h, kIdrAu, sizeof(kIdrAu), static_cast<uint16_t>(kFrameIdr | kFrameHasParams), 1000000ULL, idesc));
   h.session.OnFrame(idesc, h.now);
   h.ingress.Release(idesc);
-  RS_CHECK(!h.session.AwaitingRtpInfo());
+  RS_CHECK(h.session.AwaitingRtpInfo() == false);
   char play_response[kRtspTxBytes + 1U] = {};
   static_cast<void>(h.Peek(play_response, sizeof(play_response)));
   const char* rtp_time = std::strstr(play_response, ";rtptime=");
@@ -861,7 +861,7 @@ void Capture(Harness& h, std::vector<uint8_t>& capture) {
 
 bool PushAndPlay(Harness& h, const std::vector<uint8_t>& au, uint16_t flags) {
   FrameDesc desc{};
-  if (!PushAu(h, au.data(), static_cast<uint32_t>(au.size()), flags, 40000000ULL, desc)) {
+  if (PushAu(h, au.data(), static_cast<uint32_t>(au.size()), flags, 40000000ULL, desc) == false) {
     return false;
   }
   h.session.OnFrame(desc, h.now);
@@ -892,7 +892,7 @@ int TestFirstIdrInjectsStoredParams() {
   RS_CHECK(PushAu(h, idr_no_params, sizeof(idr_no_params), kFrameIdr, 40000000ULL, desc));
   h.session.OnFrame(desc, h.now);
   h.ingress.Release(desc);
-  RS_CHECK(!h.session.AwaitingRtpInfo());
+  RS_CHECK(h.session.AwaitingRtpInfo() == false);
 
   std::vector<uint8_t> capture;
   Capture(h, capture);
@@ -915,7 +915,7 @@ int TestFirstIdrInjectsStoredParams() {
 
 int TestH265DescribeAndTcpPlay() {
   Harness h(Codec::kH265);
-  if (!SdpReady(h.params)) {
+  if (SdpReady(h.params) == false) {
     std::printf("test_rtsp_session: NOTE H.265 SDP is not implemented yet, H.265 checks skipped\n");
     return 0;
   }
@@ -927,7 +927,7 @@ int TestH265DescribeAndTcpPlay() {
   RS_CHECK(HasText(h, "sprop-vps="));
   RS_CHECK(HasText(h, "sprop-sps="));
   RS_CHECK(HasText(h, "sprop-pps="));
-  RS_CHECK(!HasText(h, "H264/"));
+  RS_CHECK(HasText(h, "H264/") == false);
   RS_CHECK(HasText(h, "m=video 0 RTP/AVP 96"));
 
   // Content-Length must cover exactly the SDP body (no trailing NUL/media).
@@ -959,7 +959,7 @@ int TestH265DescribeAndTcpPlay() {
 
   std::vector<uint8_t> idr_au = HevcAu(kHevcIdr, sizeof(kHevcIdr));
   RS_CHECK(PushAndPlay(h, idr_au, static_cast<uint16_t>(kFrameIdr | kFrameHasParams)));
-  RS_CHECK(!h.session.AwaitingRtpInfo());
+  RS_CHECK(h.session.AwaitingRtpInfo() == false);
 
   std::vector<uint8_t> capture;
   Capture(h, capture);
@@ -985,7 +985,7 @@ int TestH265DescribeAndTcpPlay() {
 
 int TestH265FuAcrossPumps() {
   Harness h(Codec::kH265);
-  if (!SdpReady(h.params)) {
+  if (SdpReady(h.params) == false) {
     std::printf("test_rtsp_session: NOTE H.265 SDP is not implemented yet, FU check skipped\n");
     return 0;
   }
@@ -1153,7 +1153,7 @@ int OpenUdpClient(uint16_t& port) {
 
 int TestH265UdpPlay() {
   Harness h(Codec::kH265);
-  if (!SdpReady(h.params)) {
+  if (SdpReady(h.params) == false) {
     std::printf("test_rtsp_session: NOTE H.265 SDP is not implemented yet, UDP check skipped\n");
     return 0;
   }
@@ -1222,7 +1222,7 @@ int TestH265BadParamSets() {
   sp.pps = kHevcPps;
   sp.pps_len = sizeof(kHevcPps);
   auto r = BuildSdp(sp, osp::writable_byte_span(reinterpret_cast<std::byte*>(body), sizeof(body)));
-  RS_CHECK(!r.has_value());
+  RS_CHECK(r.has_value() == false);
   RS_CHECK_EQ(r.get_error(), SdpError::kBadParamSet);
   return 0;
 }
@@ -1233,7 +1233,7 @@ int TestCodecExclusivePerSession() {
   desc.H("CSeq", "90");
   RS_CHECK_EQ(h.Do(desc), 200U);
   RS_CHECK(HasText(h, "H264/90000"));
-  RS_CHECK(!HasText(h, "H265/"));
+  RS_CHECK(HasText(h, "H265/") == false);
   h.Drain();
 
   TrackParams p265 = h.params;
@@ -1253,7 +1253,7 @@ int TestCodecExclusivePerSession() {
   desc2.H("CSeq", "91");
   RS_CHECK_EQ(h.Do(desc2), 200U);
   RS_CHECK(HasText(h, "H265/90000"));
-  RS_CHECK(!HasText(h, "H264/"));
+  RS_CHECK(HasText(h, "H264/") == false);
   h.Drain();
 
   h.session.Configure(h.ingress, h.params, cfg);
@@ -1261,7 +1261,7 @@ int TestCodecExclusivePerSession() {
   desc3.H("CSeq", "92");
   RS_CHECK_EQ(h.Do(desc3), 200U);
   RS_CHECK(HasText(h, "H264/90000"));
-  RS_CHECK(!HasText(h, "H265/"));
+  RS_CHECK(HasText(h, "H265/") == false);
   return 0;
 }
 
@@ -1349,9 +1349,9 @@ int TestServerParamSets() {
   cfg.loop_thread.stack_size = 1U;
   const std::unique_ptr<RtspServer> failed_server(new RtspServer());
   const auto failed = failed_server->Start(cfg);
-  RS_CHECK(!failed.has_value());
+  RS_CHECK(failed.has_value() == false);
   RS_CHECK(failed.get_error() == ServerError::kBackendFailed);
-  RS_CHECK(!failed_server->Running());
+  RS_CHECK(failed_server->Running() == false);
   cfg.loop_thread.stack_size = 1024U * 1024U;
   const std::unique_ptr<RtspServer> probe_server(new RtspServer());
   RS_CHECK(probe_server->Start(cfg).has_value());
@@ -1368,7 +1368,7 @@ int TestServerParamSets() {
   osp::ThreadOptions source_options;
   source_options.stack_size = 1U;
   const auto source_failed = src264.Start(*source_ingress, SourceCallbacks{}, source_options);
-  RS_CHECK(!source_failed.has_value());
+  RS_CHECK(source_failed.has_value() == false);
   RS_CHECK(source_failed.get_error() == FileSourceError::kThreadFailed);
   source_options.stack_size = 1024U * 1024U;
   RS_CHECK(src264.Start(*source_ingress, SourceCallbacks{}, source_options).has_value());
@@ -1392,13 +1392,13 @@ int TestServerParamSets() {
   // the source boundary, before any server is started.
   FileSource mismatch_src;
   auto mm = mismatch_src.Open(p265, Codec::kH264);
-  RS_CHECK(!mm.has_value());
+  RS_CHECK(mm.has_value() == false);
   RS_CHECK(mm.get_error() == FileSourceError::kBadCodec);
 
   // H.265 without VPS cannot produce a usable track.
   FileSource bad_src;
   auto bad = bad_src.Open(pbad, Codec::kUnknown);
-  RS_CHECK(!bad.has_value());
+  RS_CHECK(bad.has_value() == false);
   RS_CHECK(bad.get_error() == FileSourceError::kMissingParams);
 
   static_cast<void>(std::remove(p264));
@@ -1432,7 +1432,7 @@ int TestDeferredCloseBatch() {
   DeferredCloseBatch batch;
   batch.Configure(&CloseFdThunk, &ctx);
   RS_CHECK(batch.Mark(2U));
-  RS_CHECK(!batch.Mark(2U));
+  RS_CHECK(batch.Mark(2U) == false);
   RS_CHECK(batch.Pending(2U));
   // The fd stays open until the flush point, so accept() cannot recycle it.
   RS_CHECK(::fcntl(p1[0], F_GETFD) >= 0);
@@ -1458,9 +1458,9 @@ int TestDeferredCloseBatch() {
   // delivered, so the old event cannot reach the new connection.
   const uintptr_t old_tag = (5U << 8U) | 2U;
   RS_CHECK(ConnectionTagValid(old_tag, 5U, true, false));
-  RS_CHECK(!ConnectionTagValid(old_tag, 6U, true, false));
-  RS_CHECK(!ConnectionTagValid(old_tag, 5U, true, true));
-  RS_CHECK(!ConnectionTagValid(old_tag, 5U, false, false));
+  RS_CHECK(ConnectionTagValid(old_tag, 6U, true, false) == false);
+  RS_CHECK(ConnectionTagValid(old_tag, 5U, true, true) == false);
+  RS_CHECK(ConnectionTagValid(old_tag, 5U, false, false) == false);
   return 0;
 }
 
@@ -1502,7 +1502,7 @@ int TestIdrHookRateLimit() {
   RS_CHECK(PushAu(h, kIdrAu, sizeof(kIdrAu), static_cast<uint16_t>(kFrameIdr | kFrameHasParams), 2000000000ULL, idesc));
   h.session.OnFrame(idesc, play_ns + 1600ULL * 1000000ULL);
   h.ingress.Release(idesc);
-  RS_CHECK(!h.session.AwaitingRtpInfo());
+  RS_CHECK(h.session.AwaitingRtpInfo() == false);
   RS_CHECK_EQ(calls, 2U);
   h.session.Close(kCloseTeardown, play_ns + 1700ULL * 1000000ULL);
   return 0;

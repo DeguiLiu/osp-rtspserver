@@ -144,7 +144,7 @@ bool ParseU32(osp::byte_span s, uint32_t& out) noexcept {
 
 bool FindHeaderU32(const RtspRequest& req, const char* name, uint32_t& out) noexcept {
   osp::byte_span v;
-  if (!FindHeader(req, name, v)) {
+  if (FindHeader(req, name, v) == false) {
     return false;
   }
   return ParseU32(v, out);
@@ -234,7 +234,7 @@ bool ParsePortPair(const char* p, uint32_t n, uint32_t& a, uint32_t& b, bool pai
   a = static_cast<uint32_t>(va);
   if (i == n) {
     b = a + 1U;
-    return !pair_required;
+    return pair_required == false;
   }
   if (p[i] != '-') {
     return false;
@@ -423,12 +423,12 @@ void RtspSession::OnPeerClosed(uint64_t now_ns) noexcept {
 
 bool RtspSession::ReadRtcp(uint64_t now_ns) noexcept {
   if (closed_ || transport_ != TransportKind::kUdp) {
-    return !closed_;
+    return closed_ == false;
   }
   uint8_t buf[kMaxRtcpBytes] = {};
   for (uint32_t i = 0U; i < 4U; ++i) {
     auto got = udp_.RecvRtcp(buf, sizeof(buf));
-    if (!got.has_value()) {
+    if (got.has_value() == false) {
       if (got.get_error() == TransportError::kWouldBlock) {
         return true;
       }
@@ -503,7 +503,7 @@ SessionSnapshot RtspSession::Snapshot(uint64_t now_ns) const noexcept {
 // ===========================================================================
 
 void RtspSession::OutStr(OutBuf& out, const char* s) noexcept {
-  if (!out.ok) {
+  if (out.ok == false) {
     return;
   }
   uint32_t n = 0U;
@@ -519,7 +519,7 @@ void RtspSession::OutStr(OutBuf& out, const char* s) noexcept {
 }
 
 void RtspSession::OutCh(OutBuf& out, char c) noexcept {
-  if (!out.ok || out.len >= out.cap) {
+  if (out.ok == false || out.len >= out.cap) {
     out.ok = false;
     return;
   }
@@ -555,7 +555,7 @@ void RtspSession::BeginResponse(OutBuf& out, uint16_t status, uint32_t cseq) noe
 }
 
 bool RtspSession::FinishResponse(OutBuf& out) noexcept {
-  if (!out.ok) {
+  if (out.ok == false) {
     return false;
   }
   tx_.MarkProgressIfEmpty(last_activity_ns_);
@@ -565,7 +565,7 @@ bool RtspSession::FinishResponse(OutBuf& out) noexcept {
 
 bool RtspSession::OpenResponse(OutBuf& out, uint16_t status, uint32_t cseq, uint32_t reserve) noexcept {
   out = OutBuf{};
-  if (!tx_.Reserve(reserve)) {
+  if (tx_.Reserve(reserve) == false) {
     return false;
   }
   const osp::writable_byte_span tail = tx_.Tail();
@@ -577,7 +577,7 @@ bool RtspSession::OpenResponse(OutBuf& out, uint16_t status, uint32_t cseq, uint
 }
 
 uint16_t RtspSession::CloseResponse(OutBuf& out, uint16_t status) noexcept {
-  if (!FinishResponse(out)) {
+  if (FinishResponse(out) == false) {
     Close(kCloseControlOverflow, last_activity_ns_);
     return 0U;
   }
@@ -586,7 +586,7 @@ uint16_t RtspSession::CloseResponse(OutBuf& out, uint16_t status) noexcept {
 
 uint16_t RtspSession::WriteStatus(uint16_t status, uint32_t cseq) noexcept {
   OutBuf out;
-  if (!OpenResponse(out, status, cseq, 192U)) {
+  if (OpenResponse(out, status, cseq, 192U) == false) {
     Close(kCloseControlOverflow, last_activity_ns_);
     return 0U;
   }
@@ -614,7 +614,7 @@ void RtspSession::ConsumeTx(uint32_t bytes, uint64_t now_ns) noexcept {
 bool RtspSession::SessionMatches(const RtspRequest& req, bool& header_present) const noexcept {
   osp::byte_span v;
   header_present = FindHeader(req, "Session", v);
-  if (!header_present) {
+  if (header_present == false) {
     return session_id_.empty();
   }
   uint32_t n = 0U;
@@ -639,7 +639,7 @@ void RtspSession::NewSessionIdentity(uint64_t now) noexcept {
 
 bool RtspSession::ParseTransport(const RtspRequest& req) noexcept {
   osp::byte_span hv;
-  if (!FindHeader(req, "Transport", hv) || hv.size() == 0U || hv.size() > kMaxTransportHeader) {
+  if (FindHeader(req, "Transport", hv) == false || hv.size() == 0U || hv.size() > kMaxTransportHeader) {
     return false;
   }
   char buf[kMaxTransportHeader];
@@ -648,7 +648,7 @@ bool RtspSession::ParseTransport(const RtspRequest& req) noexcept {
   const char* end = buf + hv.size();
   const char* tok = nullptr;
   uint32_t tok_len = 0U;
-  if (!NextToken(p, end, tok, tok_len)) {
+  if (NextToken(p, end, tok, tok_len) == false) {
     return false;
   }
   TransportKind kind = TransportKind::kNone;
@@ -674,13 +674,13 @@ bool RtspSession::ParseTransport(const RtspRequest& req) noexcept {
       return false;
     } else if (StartsWithLitCI(tok, tok_len, "client_port=")) {
       const uint32_t off = static_cast<uint32_t>(sizeof("client_port=") - 1U);
-      if (!ParsePortPair(tok + off, tok_len - off, crtp, crtcp, true)) {
+      if (ParsePortPair(tok + off, tok_len - off, crtp, crtcp, true) == false) {
         return false;
       }
       have_client_port = true;
     } else if (StartsWithLitCI(tok, tok_len, "interleaved=")) {
       const uint32_t off = static_cast<uint32_t>(sizeof("interleaved=") - 1U);
-      if (!ParsePortPair(tok + off, tok_len - off, rtp_ch, rtcp_ch, true)) {
+      if (ParsePortPair(tok + off, tok_len - off, rtp_ch, rtcp_ch, true) == false) {
         return false;
       }
       if (rtp_ch > kMaxInterleavedChannel || rtcp_ch > kMaxInterleavedChannel || rtcp_ch != rtp_ch + 1U) {
@@ -688,13 +688,13 @@ bool RtspSession::ParseTransport(const RtspRequest& req) noexcept {
       }
       have_interleaved = true;
     } else if (StartsWithLitCI(tok, tok_len, "mode=")) {
-      if (!StartsWithLitCI(tok, tok_len, "mode=play")) {
+      if (StartsWithLitCI(tok, tok_len, "mode=play") == false) {
         return false;
       }
     }
   }
   if (kind == TransportKind::kTcp) {
-    if (!have_interleaved) {
+    if (have_interleaved == false) {
       return false;
     }
     rtp_channel_ = static_cast<uint8_t>(rtp_ch);
@@ -703,7 +703,7 @@ bool RtspSession::ParseTransport(const RtspRequest& req) noexcept {
     return true;
   }
   // RFC 3550 pair: even RTP port, next odd port for RTCP.
-  if (!have_client_port || crtp < 1024U || (crtp % 2U) != 0U || crtcp != crtp + 1U) {
+  if (have_client_port == false || crtp < 1024U || (crtp % 2U) != 0U || crtcp != crtp + 1U) {
     return false;
   }
   client_rtp_port_ = static_cast<uint16_t>(crtp);
@@ -719,11 +719,11 @@ uint16_t RtspSession::HandleRequest(const RtspRequest& req, uint64_t now_ns) noe
   last_activity_ns_ = now_ns;
   uint32_t cseq = 0U;
   const bool have_cseq = FindHeaderU32(req, "CSeq", cseq);
-  if (!EqualsLit(req.version, "RTSP/1.0")) {
+  if (EqualsLit(req.version, "RTSP/1.0") == false) {
     last_status_ = WriteStatus(StatusCode(RtspStatus::kVersionNotSupported), cseq);
     return last_status_;
   }
-  if (!have_cseq) {
+  if (have_cseq == false) {
     last_status_ = WriteStatus(StatusCode(RtspStatus::kBadRequest), 0U);
     return last_status_;
   }
@@ -761,7 +761,7 @@ uint16_t RtspSession::HandleOptions(const RtspRequest& req, uint32_t cseq, uint6
   static_cast<void>(req);
   static_cast<void>(now);
   OutBuf out;
-  if (!OpenResponse(out, StatusCode(RtspStatus::kOk), cseq, 192U)) {
+  if (OpenResponse(out, StatusCode(RtspStatus::kOk), cseq, 192U) == false) {
     Close(kCloseControlOverflow, last_activity_ns_);
     return 0U;
   }
@@ -781,7 +781,7 @@ uint16_t RtspSession::HandleDescribe(const RtspRequest& req, uint32_t cseq, uint
     return WriteStatus(StatusCode(RtspStatus::kNotFound), cseq);
   }
   osp::byte_span accept;
-  if (FindHeader(req, "Accept", accept) && !ContainsLitCI(accept, "application/sdp")) {
+  if (FindHeader(req, "Accept", accept) && ContainsLitCI(accept, "application/sdp") == false) {
     return WriteStatus(StatusCode(RtspStatus::kNotAcceptable), cseq);
   }
   if (params_ == nullptr || codec_ == Codec::kUnknown) {
@@ -802,13 +802,13 @@ uint16_t RtspSession::HandleDescribe(const RtspRequest& req, uint32_t cseq, uint
   sp.clock_rate = kClockRate;
   sp.payload_type = kRtpPayloadType;
   OutBuf out;
-  if (!OpenResponse(out, StatusCode(RtspStatus::kOk), cseq, kMaxSdpBody + 320U)) {
+  if (OpenResponse(out, StatusCode(RtspStatus::kOk), cseq, kMaxSdpBody + 320U) == false) {
     Close(kCloseControlOverflow, last_activity_ns_);
     return 0U;
   }
   char* const body = out.dst + out.cap - kMaxSdpBody;
   auto sdp = BuildSdp(sp, osp::writable_byte_span(reinterpret_cast<std::byte*>(body), kMaxSdpBody));
-  if (!sdp.has_value() || sdp.value() == 0U || sdp.value() > kMaxSdpBody) {
+  if (sdp.has_value() == false || sdp.value() == 0U || sdp.value() > kMaxSdpBody) {
     return WriteStatus(StatusCode(RtspStatus::kInternalError), cseq);
   }
   OutStr(out, "Content-Base: rtsp://");
@@ -844,10 +844,10 @@ uint16_t RtspSession::HandleSetup(const RtspRequest& req, uint32_t cseq, uint64_
     return WriteStatus(StatusCode(RtspStatus::kInvalidState), cseq);
   }
   bool session_header = false;
-  if (!SessionMatches(req, session_header)) {
+  if (SessionMatches(req, session_header) == false) {
     return WriteStatus(StatusCode(RtspStatus::kSessionNotFound), cseq);
   }
-  if (!ParseTransport(req)) {
+  if (ParseTransport(req) == false) {
     return WriteStatus(StatusCode(RtspStatus::kUnsupportedTransport), cseq);
   }
 
@@ -860,7 +860,7 @@ uint16_t RtspSession::HandleSetup(const RtspRequest& req, uint32_t cseq, uint64_
     UdpRtpTransport fresh;
     uint16_t new_rtp_port = 0U;
     uint16_t new_rtcp_port = 0U;
-    if (!fresh.Open(client_ipv4_, client_rtp_port_, client_rtcp_port_, new_rtp_port, new_rtcp_port)) {
+    if (fresh.Open(client_ipv4_, client_rtp_port_, client_rtcp_port_, new_rtp_port, new_rtcp_port) == false) {
       hsm_ctx_.setup_ok = false;
       static_cast<void>(hsm_.Dispatch(sess::kSetupFail));
       transport_ = TransportKind::kNone;
@@ -875,19 +875,19 @@ uint16_t RtspSession::HandleSetup(const RtspRequest& req, uint32_t cseq, uint64_
     server_rtcp_port_ = 0U;
   }
 
-  if (!HasSession()) {
+  if (HasSession() == false) {
     NewSessionIdentity(now);
   }
   ResetMedia();
   hsm_ctx_.setup_ok = true;
-  if (!hsm_.Dispatch(sess::kSetupOk)) {
+  if (hsm_.Dispatch(sess::kSetupOk) == false) {
     udp_.Close();
     transport_ = TransportKind::kNone;
     return WriteStatus(StatusCode(RtspStatus::kInternalError), cseq);
   }
 
   OutBuf out;
-  if (!OpenResponse(out, StatusCode(RtspStatus::kOk), cseq, 320U)) {
+  if (OpenResponse(out, StatusCode(RtspStatus::kOk), cseq, 320U) == false) {
     Close(kCloseControlOverflow, now);
     return 0U;
   }
@@ -926,21 +926,21 @@ uint16_t RtspSession::HandlePlay(const RtspRequest& req, uint32_t cseq, uint64_t
     return WriteStatus(StatusCode(RtspStatus::kNotFound), cseq);
   }
   bool session_header = false;
-  if (!SessionMatches(req, session_header) || !session_header) {
+  if (SessionMatches(req, session_header) == false || session_header == false) {
     return WriteStatus(StatusCode(RtspStatus::kSessionNotFound), cseq);
   }
-  if (!hsm_.IsInState(sess::kReady)) {
+  if (hsm_.IsInState(sess::kReady) == false) {
     return WriteStatus(StatusCode(RtspStatus::kInvalidState), cseq);
   }
   osp::byte_span range;
-  if (FindHeader(req, "Range", range) && !ContainsLitCI(range, "npt=0")) {
+  if (FindHeader(req, "Range", range) && ContainsLitCI(range, "npt=0") == false) {
     return WriteStatus(StatusCode(RtspStatus::kInvalidRange), cseq);
   }
   if (transport_ == TransportKind::kNone) {
     return WriteStatus(StatusCode(RtspStatus::kInvalidState), cseq);
   }
   hsm_ctx_.setup_ok = true;
-  if (!hsm_.Dispatch(sess::kPlayOk)) {
+  if (hsm_.Dispatch(sess::kPlayOk) == false) {
     return WriteStatus(StatusCode(RtspStatus::kInvalidState), cseq);
   }
 
@@ -964,14 +964,14 @@ uint16_t RtspSession::HandleTeardown(const RtspRequest& req, uint32_t cseq, uint
     return WriteStatus(StatusCode(RtspStatus::kBadRequest), cseq);
   }
   bool session_header = false;
-  if (!SessionMatches(req, session_header) || !session_header) {
+  if (SessionMatches(req, session_header) == false || session_header == false) {
     return WriteStatus(StatusCode(RtspStatus::kSessionNotFound), cseq);
   }
-  if (!hsm_.IsInState(sess::kActive)) {
+  if (hsm_.IsInState(sess::kActive) == false) {
     return WriteStatus(StatusCode(RtspStatus::kInvalidState), cseq);
   }
   OutBuf out;
-  if (!OpenResponse(out, StatusCode(RtspStatus::kOk), cseq, 192U)) {
+  if (OpenResponse(out, StatusCode(RtspStatus::kOk), cseq, 192U) == false) {
     Close(kCloseControlOverflow, now);
     return 0U;
   }
@@ -995,14 +995,14 @@ uint16_t RtspSession::HandleTeardown(const RtspRequest& req, uint32_t cseq, uint
 uint16_t RtspSession::HandleGetParameter(const RtspRequest& req, uint32_t cseq, uint64_t now) noexcept {
   static_cast<void>(now);
   bool session_header = false;
-  if (!SessionMatches(req, session_header) || !session_header) {
+  if (SessionMatches(req, session_header) == false || session_header == false) {
     return WriteStatus(StatusCode(RtspStatus::kSessionNotFound), cseq);
   }
-  if (!hsm_.IsInState(sess::kActive)) {
+  if (hsm_.IsInState(sess::kActive) == false) {
     return WriteStatus(StatusCode(RtspStatus::kInvalidState), cseq);
   }
   OutBuf out;
-  if (!OpenResponse(out, StatusCode(RtspStatus::kOk), cseq, 128U)) {
+  if (OpenResponse(out, StatusCode(RtspStatus::kOk), cseq, 128U) == false) {
     Close(kCloseControlOverflow, last_activity_ns_);
     return 0U;
   }
@@ -1014,7 +1014,7 @@ uint16_t RtspSession::HandleUnsupported(const RtspRequest& req, uint32_t cseq, u
   static_cast<void>(req);
   static_cast<void>(now);
   OutBuf out;
-  if (!OpenResponse(out, StatusCode(RtspStatus::kMethodNotAllowed), cseq, 256U)) {
+  if (OpenResponse(out, StatusCode(RtspStatus::kMethodNotAllowed), cseq, 256U) == false) {
     Close(kCloseControlOverflow, last_activity_ns_);
     return 0U;
   }
@@ -1054,7 +1054,7 @@ void RtspSession::OnInputGap(uint64_t now_ns) noexcept {
 }
 
 void RtspSession::OnFrame(const FrameDesc& desc, uint64_t now_ns) noexcept {
-  if (closed_ || !media_enabled_ || !hsm_.IsInState(sess::kPlaying)) {
+  if (closed_ || media_enabled_ == false || hsm_.IsInState(sess::kPlaying) == false) {
     return;
   }
   if ((desc.flags & kFrameIdr) == 0U && media_.NeedIdr()) {
@@ -1091,7 +1091,7 @@ void RtspSession::DropToAwaitIdr(uint64_t now_ns) noexcept {
 }
 
 void RtspSession::Pump(uint64_t now_ns) noexcept {
-  if (closed_ || !media_enabled_) {
+  if (closed_ || media_enabled_ == false) {
     return;
   }
   if (transport_ == TransportKind::kUdp || transport_ == TransportKind::kTcp) {
@@ -1101,7 +1101,7 @@ void RtspSession::Pump(uint64_t now_ns) noexcept {
 
 bool RtspSession::WritePlayResponse(uint64_t now) noexcept {
   OutBuf out;
-  if (!OpenResponse(out, StatusCode(RtspStatus::kOk), cseq_, 288U)) {
+  if (OpenResponse(out, StatusCode(RtspStatus::kOk), cseq_, 288U) == false) {
     return false;  // Retry after the server drains the buffer.
   }
   OutStr(out, "Session: ");
@@ -1115,7 +1115,7 @@ bool RtspSession::WritePlayResponse(uint64_t now) noexcept {
   OutStr(out, ";rtptime=");
   OutU32(out, CursorTs());
   OutStr(out, "\r\n\r\n");
-  if (!out.ok || !FinishResponse(out)) {
+  if (out.ok == false || FinishResponse(out) == false) {
     Close(kCloseControlOverflow, now);
     return false;
   }
@@ -1141,10 +1141,10 @@ bool RtspSession::PumpMedia(uint64_t now) noexcept {
   const bool tcp = transport_ == TransportKind::kTcp;
   uint32_t sent_bytes = 0U;
   for (uint32_t packets = 0U; packets < kMaxPacketsPerPump && sent_bytes < kPumpBudgetBytes; ++packets) {
-    if (!media_.HasCurrent() && !media_.TakeNext(now, next_seq_, ssrc_)) {
+    if (media_.HasCurrent() == false && media_.TakeNext(now, next_seq_, ssrc_) == false) {
       return true;
     }
-    if (awaiting_rtp_info_ && !WritePlayResponse(now)) {
+    if (awaiting_rtp_info_ && WritePlayResponse(now) == false) {
       return false;  // Buffer full: retry after a flush.
     }
     if (media_.Data() == nullptr) {
@@ -1158,7 +1158,7 @@ bool RtspSession::PumpMedia(uint64_t now) noexcept {
     }
     const CodecCursor saved_cursor = media_.CursorState();
     auto pkt = media_.NextPacket(ssrc_);
-    if (!pkt.has_value()) {
+    if (pkt.has_value() == false) {
       const PacketizeError err = pkt.get_error();
       if (err == PacketizeError::kEndOfAu) {
         media_.ReleaseCurrent();
@@ -1170,7 +1170,7 @@ bool RtspSession::PumpMedia(uint64_t now) noexcept {
     }
     const RtpPacket view = pkt.value();
     const uint32_t wire_bytes = view.header_len + view.prefix_len + view.payload_len;
-    if (!media_.Admit(wire_bytes, now)) {
+    if (media_.Admit(wire_bytes, now) == false) {
       media_.RestoreCursor(saved_cursor);
       // Shaping pauses the cursor and never discards the access unit: dropping
       // here forced AwaitIDR whenever an IDR exceeded the 32 KiB burst, which
@@ -1180,13 +1180,13 @@ bool RtspSession::PumpMedia(uint64_t now) noexcept {
     }
     if (tcp) {
       auto written = WriteInterleaved(tx_.Tail(), rtp_channel_, view);
-      if (!written.has_value()) {
+      if (written.has_value() == false) {
         ++counters_.interleaved_errors;
         DropToAwaitIdr(now);
         return false;
       }
       tx_.MarkProgressIfEmpty(now);
-      if (!tx_.Commit(written.value())) {
+      if (tx_.Commit(written.value()) == false) {
         ++counters_.interleaved_errors;
         DropToAwaitIdr(now);
         return false;
@@ -1201,7 +1201,7 @@ bool RtspSession::PumpMedia(uint64_t now) noexcept {
       }
 #endif
       auto sent = udp_.SendRtp(view);
-      if (!sent.has_value() || sent.value() == SendStatus::kWouldBlock) {
+      if (sent.has_value() == false || sent.value() == SendStatus::kWouldBlock) {
         ++counters_.udp_drops;
         DropToAwaitIdr(now);
         return false;
@@ -1257,7 +1257,7 @@ bool RtspSession::OnTick(uint64_t now_ns) noexcept {
     return false;
   }
   Pump(now_ns);
-  return !closed_;
+  return closed_ == false;
 }
 
 }  // namespace rs

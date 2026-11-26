@@ -106,7 +106,7 @@ bool OpenOne(osp::UdpSocket& sock, uint32_t dest_ipv4, uint16_t dest_port, uint1
         osp::socket_api::SetSockOpt(sock.Fd(), SOL_SOCKET, SO_RCVBUF, &rcvbuf, static_cast<socklen_t>(sizeof(rcvbuf))));
     ok = osp::SetFdNonBlocking(sock.Fd(), true) >= 0;
   }
-  if (!ok) {
+  if (ok == false) {
     sock.Close();
     local_port = 0U;
   }
@@ -131,22 +131,22 @@ bool UdpRtpTransport::Open(uint32_t dest_ipv4, uint16_t dest_rtp_port, uint16_t 
   // RFC 3550: RTP uses an even port and RTCP uses RTP+1. Bind the pair
   // explicitly and retry with a new ephemeral RTP port when RTP+1 is taken
   // (review P0-2); never advertise a non-contiguous or odd RTP port.
-  for (uint32_t attempt = 0U; !ok && attempt < kUdpPortPairAttempts; ++attempt) {
-    if (!OpenOne(rtp_, dest_ipv4, dest_rtp_port, 0U, local_rtp_port)) {
+  for (uint32_t attempt = 0U; ok == false && attempt < kUdpPortPairAttempts; ++attempt) {
+    if (OpenOne(rtp_, dest_ipv4, dest_rtp_port, 0U, local_rtp_port) == false) {
       break;
     }
     if (0U == (local_rtp_port & 1U)) {
       const uint16_t rtcp_bind = static_cast<uint16_t>(local_rtp_port + 1U);
       ok = OpenOne(rtcp_, dest_ipv4, dest_rtcp_port, rtcp_bind, local_rtcp_port) && (local_rtcp_port == rtcp_bind);
     }
-    if (!ok) {
+    if (ok == false) {
       rtp_.Close();
       rtcp_.Close();
       local_rtp_port = 0U;
       local_rtcp_port = 0U;
     }
   }
-  if (!ok) {
+  if (ok == false) {
     Close();
   }
   return ok;
@@ -158,7 +158,7 @@ void UdpRtpTransport::Close() noexcept {
 }
 
 osp::expected<SendStatus, TransportError> UdpRtpTransport::SendRtp(const RtpPacket& pkt) noexcept {
-  if (!IsOpen()) {
+  if (IsOpen() == false) {
     return osp::expected<SendStatus, TransportError>::error(TransportError::kNotConfigured);
   }
   const uint64_t total64 = static_cast<uint64_t>(pkt.header_len) + static_cast<uint64_t>(pkt.prefix_len) +
@@ -201,7 +201,7 @@ osp::expected<SendStatus, TransportError> UdpRtpTransport::SendRtp(const RtpPack
 }
 
 osp::expected<SendStatus, TransportError> UdpRtpTransport::SendRtcp(const uint8_t* data, uint32_t len) noexcept {
-  if (!IsOpen()) {
+  if (IsOpen() == false) {
     return osp::expected<SendStatus, TransportError>::error(TransportError::kNotConfigured);
   }
   if (nullptr == data || 0U == len || len > kMaxInterleavedFrameBytes) {

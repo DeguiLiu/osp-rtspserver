@@ -8,7 +8,7 @@
 
 #define RS_CHECK(cond)                                                              \
   do {                                                                              \
-    if (!(cond)) {                                                                  \
+    if ((cond) == false) {                                                          \
       std::fprintf(stderr, "%s:%d: CHECK failed: %s\n", __FILE__, __LINE__, #cond); \
       return 1;                                                                     \
     }                                                                               \
@@ -18,7 +18,7 @@
   do {                                                                                        \
     const auto rs_a_ = (a);                                                                   \
     const auto rs_b_ = (b);                                                                   \
-    if (!(rs_a_ == rs_b_)) {                                                                  \
+    if ((rs_a_ == rs_b_) == false) {                                                          \
       std::fprintf(stderr, "%s:%d: CHECK_EQ failed: %s != %s\n", __FILE__, __LINE__, #a, #b); \
       return 1;                                                                               \
     }                                                                                         \
@@ -26,7 +26,7 @@
 
 #define RS_REQUIRE(cond)                                                              \
   do {                                                                                \
-    if (!(cond)) {                                                                    \
+    if ((cond) == false) {                                                            \
       std::fprintf(stderr, "%s:%d: REQUIRE failed: %s\n", __FILE__, __LINE__, #cond); \
       std::abort();                                                                   \
     }                                                                                 \

@@ -15,7 +15,7 @@ using rs::IngressError;
 
 bool CommitOne(FrameIngress& ing, uint64_t pts_ns, uint32_t len, uint16_t flags, FrameDesc* out) {
   auto w = ing.Acquire(len);
-  if (!w.has_value()) {
+  if (w.has_value() == false) {
     return false;
   }
   FrameIngress::Writer writer = w.value();
@@ -23,7 +23,7 @@ bool CommitOne(FrameIngress& ing, uint64_t pts_ns, uint32_t len, uint16_t flags,
   writer.desc.flags = flags;
   std::memset(writer.au, 0x5A, len);
   auto c = ing.Commit(writer, len);
-  if (!c.has_value()) {
+  if (c.has_value() == false) {
     ing.Abort(writer);
     return false;
   }
@@ -58,12 +58,12 @@ int TestLifecycle() {
   ing.Release(popped);             // Client done.
   RS_CHECK(ing.Validate(popped));  // Loop reference still alive.
   ing.Release(popped);             // Loop reference: slot returns to the pool.
-  RS_CHECK(!ing.Validate(popped));
+  RS_CHECK(ing.Validate(popped) == false);
   RS_CHECK(ing.Data(popped) == nullptr);
 
   // Release on a stale descriptor is a no-op, not a corruption.
   ing.Release(popped);
-  RS_CHECK(!ing.AddRef(popped));
+  RS_CHECK(ing.AddRef(popped) == false);
   return 0;
 }
 
@@ -88,7 +88,7 @@ int TestGenerationReuse() {
   RS_CHECK(CommitOne(ing, 100U, 64U, 0U, &second));
   RS_CHECK_EQ(second.slot, first.slot);
   RS_CHECK(second.generation != first.generation);
-  RS_CHECK(!ing.Validate(first));
+  RS_CHECK(ing.Validate(first) == false);
   RS_CHECK(ing.Pop(popped));
   RS_CHECK_EQ(popped.generation, second.generation);
   ing.Release(popped);
@@ -103,7 +103,7 @@ int TestAbortKeepsLocalSlot() {
   const uint32_t gen = a.value().desc.generation;
   ing.Abort(a.value());
   RS_CHECK(a.value().au == nullptr);
-  RS_CHECK(!ing.Validate(a.value().desc));
+  RS_CHECK(ing.Validate(a.value().desc) == false);
 
   auto b = ing.Acquire(256U);
   RS_CHECK(b.has_value());
@@ -131,7 +131,7 @@ int TestPoolExhaustion() {
   // The descriptor queue and the slot pool have the same depth, so the pool
   // empties before Commit can ever see a full queue.
   auto ninth = ing.Acquire(32U);
-  RS_CHECK(!ninth.has_value());
+  RS_CHECK(ninth.has_value() == false);
   RS_CHECK(ninth.get_error() == IngressError::kNoSlot);
 
   FrameDesc popped{};
@@ -158,7 +158,7 @@ int TestPtsRegressionRejected() {
   writer.desc.pts_ns = 999U;
   std::memset(writer.au, 0, 16U);
   auto back = ing.Commit(writer, 16U);
-  RS_CHECK(!back.has_value());
+  RS_CHECK(back.has_value() == false);
   RS_CHECK(back.get_error() == IngressError::kInvalidAu);
   // The writer still owns its slot; Abort keeps it for the next Acquire.
   ing.Abort(writer);
@@ -181,15 +181,15 @@ int TestInvalidLengthAndStopped() {
   RS_CHECK(w.has_value());
   FrameIngress::Writer writer = w.value();
   std::memset(writer.au, 0, 64U);
-  RS_CHECK(!ing.Commit(writer, 0U).has_value());
-  RS_CHECK(!ing.Commit(writer, 65U).has_value());
+  RS_CHECK(ing.Commit(writer, 0U).has_value() == false);
+  RS_CHECK(ing.Commit(writer, 65U).has_value() == false);
   ing.Abort(writer);
 
-  RS_CHECK(!ing.Acquire(rs::kMaxAuBytes + 1U).has_value());
+  RS_CHECK(ing.Acquire(rs::kMaxAuBytes + 1U).has_value() == false);
 
   ing.Stop();
   auto stopped = ing.Acquire(16U);
-  RS_CHECK(!stopped.has_value());
+  RS_CHECK(stopped.has_value() == false);
   RS_CHECK(stopped.get_error() == IngressError::kStopped);
   return 0;
 }
@@ -237,7 +237,7 @@ int TestProducerSlotHandoff() {
   // The slot went back through the empty-slot queue: all slots are available.
   uint32_t committed = 0U;
   for (uint32_t i = 0U; i < rs::kFrameSlots; ++i) {
-    if (!CommitOne(ing, 10U + i, 8U, 0U, nullptr)) {
+    if (CommitOne(ing, 10U + i, 8U, 0U, nullptr) == false) {
       break;
     }
     ++committed;

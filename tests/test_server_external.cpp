@@ -37,13 +37,13 @@ bool StartPlay(rse2e::Client& client, uint16_t port) {
   std::string err;
   rse2e::Response response;
   const std::string uri = "rtsp://127.0.0.1:" + std::to_string(port) + "/live/trackID=0";
-  if (!client.Connect("127.0.0.1", port, 1000, err) ||
-      !client.Request("SETUP", uri, {"CSeq: 1", "Transport: RTP/AVP/TCP;unicast;interleaved=0-1"}, "", err) ||
-      !client.ReadResponse(response, 1000, err) || response.status != 200U) {
+  if (client.Connect("127.0.0.1", port, 1000, err) == false ||
+      client.Request("SETUP", uri, {"CSeq: 1", "Transport: RTP/AVP/TCP;unicast;interleaved=0-1"}, "", err) == false ||
+      client.ReadResponse(response, 1000, err) == false || response.status != 200U) {
     return false;
   }
   const std::string session = response.Get("Session");
-  return !session.empty() && client.Request("PLAY", uri, {"CSeq: 2", "Session: " + session}, "", err);
+  return session.empty() == false && client.Request("PLAY", uri, {"CSeq: 2", "Session: " + session}, "", err);
 }
 
 int32_t RunCase(rs::Codec codec, uint16_t port) {
@@ -85,7 +85,7 @@ int32_t RunCase(rs::Codec codec, uint16_t port) {
   RS_CHECK(WaitForIdr(0U, 500U));
   // Two sessions waiting for one IDR coalesce into one encoder request.
   RS_CHECK(StartPlay(second, cfg.port));
-  RS_CHECK(!WaitForIdr(1U, 250U));
+  RS_CHECK(WaitForIdr(1U, 250U) == false);
   // Missing IDR is retried once per rate-limit window.
   RS_CHECK(WaitForIdr(1U, 1100U));
 
@@ -108,13 +108,13 @@ int32_t RunCase(rs::Codec codec, uint16_t port) {
   RS_CHECK_EQ(response.status, 200U);
   RS_CHECK(second.ReadResponse(response, 1000, err));
   RS_CHECK_EQ(response.status, 200U);
-  RS_CHECK(!WaitForIdr(2U, 1100U));
+  RS_CHECK(WaitForIdr(2U, 1100U) == false);
 
   // A rejected source AU leaves a sequence gap; the next predictive AU
   // must trigger a fresh IDR request for the playing sessions.
   // Let the shared rate-limit window expire first.
   std::this_thread::sleep_for(std::chrono::milliseconds(1100));
-  RS_CHECK(!server.Ingress().Acquire(0U).has_value());
+  RS_CHECK(server.Ingress().Acquire(0U).has_value() == false);
   auto predictive = server.Ingress().Acquire(kAuBytes);
   RS_CHECK(predictive.has_value());
   rs::FrameIngress::Writer p = predictive.value();
@@ -134,9 +134,9 @@ int32_t RunCase(rs::Codec codec, uint16_t port) {
   r.desc.flags = rs::kFrameIdr;
   RS_CHECK(server.Ingress().Commit(r, kAuBytes).has_value());
   server.Wake();
-  RS_CHECK(!WaitForIdr(3U, 1100U));
+  RS_CHECK(WaitForIdr(3U, 1100U) == false);
   server.Stop();
-  RS_CHECK(!server.Running());
+  RS_CHECK(server.Running() == false);
   return 0;
 }
 

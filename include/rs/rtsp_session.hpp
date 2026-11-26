@@ -96,7 +96,7 @@ struct IdrHooks {
       return false;
     }
     constexpr uint64_t kMinIntervalNs = static_cast<uint64_t>(kIdrRequestIntervalMs) * kNsPerMs;
-    if (!force && last_request_ns != 0U && (now_ns - last_request_ns) < kMinIntervalNs) {
+    if (force == false && last_request_ns != 0U && (now_ns - last_request_ns) < kMinIntervalNs) {
       return false;
     }
     last_request_ns = now_ns;

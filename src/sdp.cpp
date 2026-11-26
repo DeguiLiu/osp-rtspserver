@@ -139,7 +139,7 @@ osp::expected<uint32_t, SdpError> BuildSdp(const SdpParams& params, osp::writabl
                                  (0U != params.sps_len) && (nullptr != params.pps) && (0U != params.pps_len))
                               : ((nullptr != params.sps) && (0U != params.sps_len) && (params.sps_len >= 4U) &&
                                  (nullptr != params.pps) && (0U != params.pps_len));
-  if (!params_ok) {
+  if (params_ok == false) {
     return osp::expected<uint32_t, SdpError>::error(SdpError::kBadParamSet);
   }
   Writer w(out);
@@ -173,7 +173,7 @@ osp::expected<uint32_t, SdpError> BuildSdp(const SdpParams& params, osp::writabl
   ok = ok && w.Append("\r\n");
   ok = ok && w.Append("a=control:trackID=0\r\n");
   ok = ok && w.Append("a=ssrc:") && w.AppendU32(params.ssrc) && w.Append("\r\n");
-  if (!ok) {
+  if (ok == false) {
     return osp::expected<uint32_t, SdpError>::error(SdpError::kBufferTooSmall);
   }
   return osp::expected<uint32_t, SdpError>::success(w.size());

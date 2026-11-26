@@ -109,7 +109,7 @@ int main() {
     RS_CHECK_EQ(std::strcmp(c.uri, "*"), 0);
     RS_CHECK_EQ(std::strcmp(c.version, "RTSP/1.0"), 0);
     RS_CHECK_EQ(c.header_count, 0U);
-    RS_CHECK(!c.null_name_ok);
+    RS_CHECK(c.null_name_ok == false);
     RS_CHECK_EQ(parser.buffered(), 0U);
   }
 
@@ -224,7 +224,7 @@ int main() {
     RS_CHECK(c.copy_ok);
     RS_CHECK_EQ(c.copy_len, 7U);
     RS_CHECK_EQ(std::strcmp(c.copy, "1234567"), 0);
-    RS_CHECK(!c.tight_ok);  // cap 5 cannot hold 7 bytes plus NUL.
+    RS_CHECK(c.tight_ok == false);  // cap 5 cannot hold 7 bytes plus NUL.
     RS_CHECK(c.dup_ok);
     RS_CHECK_EQ(c.dup_len, 5U);
     RS_CHECK_EQ(std::strcmp(c.dup, "first"), 0);
@@ -241,7 +241,7 @@ int main() {
     rs::RtspParser bad;
     Capture c2;
     r = FeedText(bad, c2, "SETUP /x RTSP/1.0\r\nContent-Length: 2\r\nContent-Length: 3\r\n\r\nhi");
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::ParseError::kMalformed);
   }
 
@@ -252,7 +252,7 @@ int main() {
     const auto r = FeedText(parser, c, "OPTIONS * RTSP/1.0\r\nCSeq: 4294967296\r\n\r\n");
     RS_CHECK(r.has_value());
     RS_CHECK_EQ(c.requests, 1U);
-    RS_CHECK(!c.cseq_ok);
+    RS_CHECK(c.cseq_ok == false);
   }
 
   // Malformed start lines.
@@ -260,12 +260,12 @@ int main() {
     rs::RtspParser parser;
     Capture c;
     auto r = FeedText(parser, c, "OPTIONS *\r\n\r\n");
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::ParseError::kMalformed);
     rs::RtspParser parser2;
     Capture c2;
     r = FeedText(parser2, c2, "OPTIONS  * RTSP/1.0\r\n\r\n");  // empty URI token
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::ParseError::kMalformed);
   }
 
@@ -274,7 +274,7 @@ int main() {
     rs::RtspParser parser;
     Capture c;
     auto r = FeedText(parser, c, "ABCDEFGHIJKLMNOPQ * RTSP/1.0\r\n\r\n");  // 17-byte method
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::ParseError::kMalformed);
     char long_uri[300] = {};
     long_uri[0] = '/';
@@ -284,7 +284,7 @@ int main() {
     rs::RtspParser parser2;
     Capture c2;
     r = FeedText(parser2, c2, line);
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::ParseError::kMalformed);
   }
 
@@ -293,7 +293,7 @@ int main() {
     rs::RtspParser parser;
     Capture c;
     auto r = FeedText(parser, c, "OPTIONS * RTSP/1.0\r\nX: 1\nY: 2\r\n\r\n");
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::ParseError::kMalformed);
     rs::RtspParser parser2;
     Capture c2;
@@ -304,12 +304,12 @@ int main() {
     char nul[32] = "OPTIONS * RTSP/1.0\r\n\r\n";
     nul[0] = '\0';
     r = parser3.Feed(reinterpret_cast<const uint8_t*>(nul), 22U, Callbacks(c3));
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::ParseError::kMalformed);
     rs::RtspParser parser4;
     Capture c4;
     r = FeedText(parser4, c4, "OPTIONS * RTSP/1.0\r\nX: 1\r\n folded\r\n\r\n");
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::ParseError::kMalformed);
   }
 
@@ -326,7 +326,7 @@ int main() {
     std::snprintf(text + used, sizeof(text) - used, "\r\n");
     const auto r =
         parser.Feed(reinterpret_cast<const uint8_t*>(text), static_cast<uint32_t>(std::strlen(text)), Callbacks(c));
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::ParseError::kTooManyHeaders);
   }
 
@@ -341,7 +341,7 @@ int main() {
     std::memcpy(text + used, "\r\n\r\n", 4U);
     used += 4U;
     const auto r = parser.Feed(reinterpret_cast<const uint8_t*>(text), used, Callbacks(c));
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::ParseError::kMalformed);
   }
 
@@ -350,12 +350,12 @@ int main() {
     rs::RtspParser parser;
     Capture c;
     auto r = parser.Feed(reinterpret_cast<const uint8_t*>("$\x01\xFF\xFF"), 4U, Callbacks(c));
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::ParseError::kBadInterleaved);
     rs::RtspParser parser2;
     Capture c2;
     r = parser2.Feed(reinterpret_cast<const uint8_t*>("$\x01\x00\x00"), 4U, Callbacks(c2));
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::ParseError::kBadInterleaved);
   }
 

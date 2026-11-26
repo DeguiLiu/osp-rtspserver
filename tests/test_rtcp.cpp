@@ -119,10 +119,10 @@ int main() {
   {
     uint8_t sr[28] = {};
     auto r = rs::BuildSenderReport(Span(sr, 27U), 1U, 0ULL, 0U, 0U, 0U);
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::RtcpError::kBufferTooSmall);
     r = rs::BuildSenderReport(osp::writable_byte_span(), 1U, 0ULL, 0U, 0U, 0U);
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::RtcpError::kBufferTooSmall);
   }
 
@@ -183,44 +183,44 @@ int main() {
     // Wrong version.
     rr[0] = static_cast<uint8_t>(0x41U);
     auto r = rs::ParseReceiverReport(rr, sizeof(rr));
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::RtcpError::kMalformed);
     // Truncated by one byte.
     MakeRr(rr, 1U, 1U, 0U, 0U, 0U, 0U, 0U, 0U);
     r = rs::ParseReceiverReport(rr, sizeof(rr) - 1U);
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::RtcpError::kMalformed);
     // RR with no report block.
     MakeRr(rr, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U);
     r = rs::ParseReceiverReport(rr, 8U);
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::RtcpError::kMalformed);
     // RR declares two blocks but the packet only holds one.
     MakeRr(rr, 1U, 1U, 0U, 0U, 0U, 0U, 0U, 0U);
     rr[0] = static_cast<uint8_t>(0x82U);
     r = rs::ParseReceiverReport(rr, sizeof(rr));
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::RtcpError::kMalformed);
     // First packet is not SR/RR.
     uint8_t sdes[8] = {0x81U, 202U, 0x00U, 0x01U, 0U, 0U, 0U, 0U};
     r = rs::ParseReceiverReport(sdes, sizeof(sdes));
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::RtcpError::kMalformed);
     // SR without a following RR in the compound.
     uint8_t only_sr[28] = {};
     MakeSr(only_sr, 0U, 1U);
     r = rs::ParseReceiverReport(only_sr, sizeof(only_sr));
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::RtcpError::kMalformed);
     // SR length field exceeds the available bytes.
     only_sr[2] = 0U;
     only_sr[3] = 12U;
     r = rs::ParseReceiverReport(only_sr, sizeof(only_sr));
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::RtcpError::kMalformed);
     // Empty input.
     r = rs::ParseReceiverReport(nullptr, 0U);
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::RtcpError::kMalformed);
   }
 
@@ -279,16 +279,16 @@ int main() {
   {
     uint8_t buf[64] = {};
     auto r = rs::BuildSenderReportWithSdes(Span(buf, 43U), 1U, "abc", 0ULL, 0U, 0U, 0U);
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::RtcpError::kBufferTooSmall);
     r = rs::BuildSenderReportWithSdes(osp::writable_byte_span(), 1U, "abc", 0ULL, 0U, 0U, 0U);
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::RtcpError::kBufferTooSmall);
     r = rs::BuildSenderReportWithSdes(Span(buf, sizeof(buf)), 1U, nullptr, 0ULL, 0U, 0U, 0U);
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::RtcpError::kMalformed);
     r = rs::BuildSenderReportWithSdes(Span(buf, sizeof(buf)), 1U, "", 0ULL, 0U, 0U, 0U);
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::RtcpError::kMalformed);
   }
 
@@ -346,7 +346,7 @@ int main() {
     RS_CHECK_EQ(summary.value().sender_reports, 1U);
     RS_CHECK_EQ(summary.value().receiver_reports, 0U);
     RS_CHECK_EQ(summary.value().byes, 0U);
-    RS_CHECK(!summary.value().has_rr);
+    RS_CHECK(summary.value().has_rr == false);
   }
 
   // Malformed compounds: empty, truncated, bad version/PT, length overflow.
@@ -354,41 +354,41 @@ int main() {
     uint8_t buf[256] = {};
     std::memcpy(buf, mixed, mixed_bytes);
     auto s = rs::ParseCompound(nullptr, 0U);
-    RS_CHECK(!s.has_value());
+    RS_CHECK(s.has_value() == false);
     RS_CHECK_EQ(s.get_error(), rs::RtcpError::kMalformed);
     s = rs::ParseCompound(buf, 0U);
-    RS_CHECK(!s.has_value());
+    RS_CHECK(s.has_value() == false);
     RS_CHECK_EQ(s.get_error(), rs::RtcpError::kMalformed);
     s = rs::ParseCompound(buf, 4U);
-    RS_CHECK(!s.has_value());
+    RS_CHECK(s.has_value() == false);
     RS_CHECK_EQ(s.get_error(), rs::RtcpError::kMalformed);
     s = rs::ParseCompound(buf, mixed_bytes / 2U);
-    RS_CHECK(!s.has_value());
+    RS_CHECK(s.has_value() == false);
     RS_CHECK_EQ(s.get_error(), rs::RtcpError::kMalformed);
     buf[0] = static_cast<uint8_t>(0x40U);  // Version 1.
     s = rs::ParseCompound(buf, mixed_bytes);
-    RS_CHECK(!s.has_value());
+    RS_CHECK(s.has_value() == false);
     RS_CHECK_EQ(s.get_error(), rs::RtcpError::kMalformed);
     std::memcpy(buf, mixed, mixed_bytes);
     buf[1] = 199U;  // Below the RTCP range.
     s = rs::ParseCompound(buf, mixed_bytes);
-    RS_CHECK(!s.has_value());
+    RS_CHECK(s.has_value() == false);
     RS_CHECK_EQ(s.get_error(), rs::RtcpError::kMalformed);
     std::memcpy(buf, mixed, mixed_bytes);
     buf[1] = 208U;  // Above the RTCP range.
     s = rs::ParseCompound(buf, mixed_bytes);
-    RS_CHECK(!s.has_value());
+    RS_CHECK(s.has_value() == false);
     RS_CHECK_EQ(s.get_error(), rs::RtcpError::kMalformed);
     std::memcpy(buf, mixed, mixed_bytes);
     buf[2] = 0xFFU;  // Length field (262144 bytes) exceeds the datagram.
     buf[3] = 0xFFU;
     s = rs::ParseCompound(buf, mixed_bytes);
-    RS_CHECK(!s.has_value());
+    RS_CHECK(s.has_value() == false);
     RS_CHECK_EQ(s.get_error(), rs::RtcpError::kMalformed);
     // A compound must start with SR or RR.
     uint8_t sdes_first[8] = {0x81U, 202U, 0x00U, 0x01U, 0U, 0U, 0U, 0U};
     s = rs::ParseCompound(sdes_first, sizeof(sdes_first));
-    RS_CHECK(!s.has_value());
+    RS_CHECK(s.has_value() == false);
     RS_CHECK_EQ(s.get_error(), rs::RtcpError::kMalformed);
   }
 

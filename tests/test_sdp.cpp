@@ -130,10 +130,10 @@ int main() {
     RS_CHECK(r.has_value());
     RS_CHECK_EQ(r.value(), expected_len);
     r = rs::BuildSdp(Params(), Span(buf, expected_len - 1U));
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::SdpError::kBufferTooSmall);
     r = rs::BuildSdp(Params(), Span(buf, 0U));
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::SdpError::kBufferTooSmall);
   }
 
@@ -160,37 +160,37 @@ int main() {
     rs::SdpParams p = Params();
     p.server_ip = nullptr;
     auto r = rs::BuildSdp(p, Span(buf, sizeof(buf)));
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::SdpError::kMissingField);
     p = Params();
     p.session_name = nullptr;
     r = rs::BuildSdp(p, Span(buf, sizeof(buf)));
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::SdpError::kMissingField);
     p = Params();
     p.sps = nullptr;
     r = rs::BuildSdp(p, Span(buf, sizeof(buf)));
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::SdpError::kBadParamSet);
     p = Params();
     p.sps_len = 0U;
     r = rs::BuildSdp(p, Span(buf, sizeof(buf)));
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::SdpError::kBadParamSet);
     p = Params();
     p.sps_len = 3U;  // profile-level-id needs bytes 1..3.
     r = rs::BuildSdp(p, Span(buf, sizeof(buf)));
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::SdpError::kBadParamSet);
     p = Params();
     p.pps = nullptr;
     r = rs::BuildSdp(p, Span(buf, sizeof(buf)));
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::SdpError::kBadParamSet);
     p = Params();
     p.pps_len = 0U;
     r = rs::BuildSdp(p, Span(buf, sizeof(buf)));
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::SdpError::kBadParamSet);
   }
 
@@ -249,18 +249,18 @@ int main() {
     p.vps = nullptr;
     p.vps_len = 0U;
     auto r = rs::BuildSdp(p, Span(buf, sizeof(buf)));
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::SdpError::kBadParamSet);
     p = Params265();
     p.sps = nullptr;
     p.sps_len = 0U;
     r = rs::BuildSdp(p, Span(buf, sizeof(buf)));
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::SdpError::kBadParamSet);
     p = Params265();
     p.pps_len = 0U;
     r = rs::BuildSdp(p, Span(buf, sizeof(buf)));
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::SdpError::kBadParamSet);
     const char* probe =
         "v=0\r\n"
@@ -277,7 +277,7 @@ int main() {
         "a=ssrc:305419896\r\n";
     const uint32_t full_len = static_cast<uint32_t>(std::strlen(probe));
     r = rs::BuildSdp(Params265(), Span(buf, full_len - 1U));
-    RS_CHECK(!r.has_value());
+    RS_CHECK(r.has_value() == false);
     RS_CHECK_EQ(r.get_error(), rs::SdpError::kBufferTooSmall);
   }
 
@@ -300,11 +300,11 @@ int main() {
     RS_CHECK(rs::DetectCodec(h265_au, sizeof(h265_au), codec));
     RS_CHECK_EQ(codec, rs::Codec::kH265);
     codec = rs::Codec::kH264;
-    RS_CHECK(!rs::DetectCodec(no_start_code, sizeof(no_start_code), codec));
+    RS_CHECK(rs::DetectCodec(no_start_code, sizeof(no_start_code), codec) == false);
     codec = rs::Codec::kH264;
-    RS_CHECK(!rs::DetectCodec(random_bytes, sizeof(random_bytes), codec));
+    RS_CHECK(rs::DetectCodec(random_bytes, sizeof(random_bytes), codec) == false);
     // A scanned NAL with no plausible header form reports kUnknown.
-    RS_CHECK(!rs::DetectCodec(implausible_nal, sizeof(implausible_nal), codec));
+    RS_CHECK(rs::DetectCodec(implausible_nal, sizeof(implausible_nal), codec) == false);
     RS_CHECK_EQ(codec, rs::Codec::kUnknown);
   }
 

@@ -114,9 +114,9 @@ void ProducerMain(rs::RtspServer& server, EncoderState& state) {
   const uint64_t refresh_at = pts_ns + static_cast<uint64_t>(kParamsRefreshFrames) * kFrameIntervalMs * rs::kNsPerMs;
   const uint64_t period_ns = static_cast<uint64_t>(kFrameIntervalMs) * rs::kNsPerMs;
 
-  while (g_stop == 0 && !server.StopRequested()) {
+  while (g_stop == 0 && server.StopRequested() == false) {
     auto writer = server.Ingress().Acquire(rs::kMaxAuBytes);
-    if (!writer.has_value()) {
+    if (writer.has_value() == false) {
       // A dropped AU leaves a sequence gap; the server moves clients to
       // AwaitIDR and the request below produces the recovery keyframe.
       ++dropped;
@@ -138,7 +138,7 @@ void ProducerMain(rs::RtspServer& server, EncoderState& state) {
     }
     writer.value().desc.pts_ns = pts_ns;
     writer.value().desc.flags = idr ? static_cast<uint16_t>(rs::kFrameIdr) : 0U;
-    if (!server.Ingress().Commit(writer.value(), len).has_value()) {
+    if (server.Ingress().Commit(writer.value(), len).has_value() == false) {
       server.Ingress().Abort(writer.value());
       ++dropped;
       if (cb.drop != nullptr) {
@@ -226,7 +226,7 @@ int main(int argc, char** argv) {
   rs::RtspServer& server = *server_storage;
   server.SetIdrRequester(&OnIdrRequest, &state);
   const auto started = server.Start(cfg);
-  if (!started.has_value()) {
+  if (started.has_value() == false) {
     std::fprintf(stderr, "encoder_source_demo: start failed (error %" PRIu32 ")\n",
                  static_cast<uint32_t>(started.get_error()));
     return 1;
@@ -236,7 +236,7 @@ int main(int argc, char** argv) {
   std::fflush(stdout);
 
   std::thread producer(ProducerMain, std::ref(server), std::ref(state));
-  while (g_stop == 0 && !server.StopRequested()) {
+  while (g_stop == 0 && server.StopRequested() == false) {
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
   producer.join();

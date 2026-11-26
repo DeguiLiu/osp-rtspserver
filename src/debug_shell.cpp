@@ -105,7 +105,7 @@ bool RequireServer() noexcept {
 
 bool SlotActive(const ServerSnapshot& snapshot, uint32_t slot) noexcept {
   for (uint32_t i = 0U; i < snapshot.client_count; ++i) {
-    if (snapshot.clients[i].slot == slot && !snapshot.clients[i].closing) {
+    if (snapshot.clients[i].slot == slot && snapshot.clients[i].closing == false) {
       return true;
     }
   }
@@ -115,7 +115,7 @@ bool SlotActive(const ServerSnapshot& snapshot, uint32_t slot) noexcept {
 int CmdStats(int argc, char** argv) noexcept {
   static_cast<void>(argc);
   static_cast<void>(argv);
-  if (!RequireServer()) {
+  if (RequireServer() == false) {
     return -1;
   }
   const ServerSnapshot& s = ShellSnapshot();
@@ -153,7 +153,7 @@ int CmdStats(int argc, char** argv) noexcept {
 int CmdClients(int argc, char** argv) noexcept {
   static_cast<void>(argc);
   static_cast<void>(argv);
-  if (!RequireServer()) {
+  if (RequireServer() == false) {
     return -1;
   }
   const ServerSnapshot& s = ShellSnapshot();
@@ -179,7 +179,7 @@ int CmdClients(int argc, char** argv) noexcept {
 }
 
 int CmdClient(int argc, char** argv) noexcept {
-  if (!RequireServer()) {
+  if (RequireServer() == false) {
     return -1;
   }
   if (argc != 2) {
@@ -187,7 +187,7 @@ int CmdClient(int argc, char** argv) noexcept {
     return -1;
   }
   uint32_t slot = 0U;
-  if (!ParseU32(argv[1], slot) || slot >= kMaxConnections) {
+  if (ParseU32(argv[1], slot) == false || slot >= kMaxConnections) {
     osp::DebugShell::Printf("invalid slot\r\n");
     return -1;
   }
@@ -246,7 +246,7 @@ int CmdClient(int argc, char** argv) noexcept {
 int CmdNet(int argc, char** argv) noexcept {
   static_cast<void>(argc);
   static_cast<void>(argv);
-  if (!RequireServer()) {
+  if (RequireServer() == false) {
     return -1;
   }
   const ServerSnapshot& s = ShellSnapshot();
@@ -264,7 +264,7 @@ int CmdNet(int argc, char** argv) noexcept {
 int CmdPool(int argc, char** argv) noexcept {
   static_cast<void>(argc);
   static_cast<void>(argv);
-  if (!RequireServer()) {
+  if (RequireServer() == false) {
     return -1;
   }
   const ServerSnapshot& s = ShellSnapshot();
@@ -282,7 +282,7 @@ int CmdPool(int argc, char** argv) noexcept {
 int CmdFd(int argc, char** argv) noexcept {
   static_cast<void>(argc);
   static_cast<void>(argv);
-  if (!RequireServer()) {
+  if (RequireServer() == false) {
     return -1;
   }
   const ServerSnapshot& s = ShellSnapshot();
@@ -304,7 +304,7 @@ int CmdFd(int argc, char** argv) noexcept {
 int CmdTimers(int argc, char** argv) noexcept {
   static_cast<void>(argc);
   static_cast<void>(argv);
-  if (!RequireServer()) {
+  if (RequireServer() == false) {
     return -1;
   }
   const ServerSnapshot& s = ShellSnapshot();
@@ -318,7 +318,7 @@ int CmdTimers(int argc, char** argv) noexcept {
 int CmdStream(int argc, char** argv) noexcept {
   static_cast<void>(argc);
   static_cast<void>(argv);
-  if (!RequireServer()) {
+  if (RequireServer() == false) {
     return -1;
   }
   const ServerSnapshot& s = ShellSnapshot();
@@ -337,7 +337,7 @@ int CmdStream(int argc, char** argv) noexcept {
 int CmdRtcp(int argc, char** argv) noexcept {
   static_cast<void>(argc);
   static_cast<void>(argv);
-  if (!RequireServer()) {
+  if (RequireServer() == false) {
     return -1;
   }
   const ServerSnapshot& s = ShellSnapshot();
@@ -361,7 +361,7 @@ int CmdRtcp(int argc, char** argv) noexcept {
 int CmdLatency(int argc, char** argv) noexcept {
   static_cast<void>(argc);
   static_cast<void>(argv);
-  if (!RequireServer()) {
+  if (RequireServer() == false) {
     return -1;
   }
   const ServerSnapshot& s = ShellSnapshot();
@@ -387,7 +387,7 @@ int CmdMem(int argc, char** argv) noexcept {
 int CmdConfig(int argc, char** argv) noexcept {
   static_cast<void>(argc);
   static_cast<void>(argv);
-  if (!RequireServer()) {
+  if (RequireServer() == false) {
     return -1;
   }
   const ServerSnapshot& s = ShellSnapshot();
@@ -423,7 +423,7 @@ int CmdVersion(int argc, char** argv) noexcept {
 }
 
 int CmdLog(int argc, char** argv) noexcept {
-  if (!RequireServer()) {
+  if (RequireServer() == false) {
     return -1;
   }
   if (argc != 2) {
@@ -449,7 +449,7 @@ int CmdLog(int argc, char** argv) noexcept {
 }
 
 int CmdKick(int argc, char** argv) noexcept {
-  if (!RequireServer()) {
+  if (RequireServer() == false) {
     return -1;
   }
   if (argc != 2) {
@@ -457,11 +457,11 @@ int CmdKick(int argc, char** argv) noexcept {
     return -1;
   }
   uint32_t slot = 0U;
-  if (!ParseU32(argv[1], slot) || slot >= kMaxConnections) {
+  if (ParseU32(argv[1], slot) == false || slot >= kMaxConnections) {
     osp::DebugShell::Printf("invalid slot\r\n");
     return -1;
   }
-  if (!SlotActive(ShellSnapshot(), static_cast<uint32_t>(slot))) {
+  if (SlotActive(ShellSnapshot(), static_cast<uint32_t>(slot)) == false) {
     osp::DebugShell::Printf("slot not active\r\n");
     return -1;
   }
@@ -471,7 +471,7 @@ int CmdKick(int argc, char** argv) noexcept {
 }
 
 int CmdReset(int argc, char** argv) noexcept {
-  if (!RequireServer()) {
+  if (RequireServer() == false) {
     return -1;
   }
   ShellCommand cmd;
@@ -479,11 +479,11 @@ int CmdReset(int argc, char** argv) noexcept {
     cmd.id = ShellCommandId::kResetStats;
   } else if (argc == 3 && std::strcmp(argv[1], "client") == 0) {
     uint32_t slot = 0U;
-    if (!ParseU32(argv[2], slot) || slot >= kMaxConnections) {
+    if (ParseU32(argv[2], slot) == false || slot >= kMaxConnections) {
       osp::DebugShell::Printf("invalid slot\r\n");
       return -1;
     }
-    if (!SlotActive(ShellSnapshot(), static_cast<uint32_t>(slot))) {
+    if (SlotActive(ShellSnapshot(), static_cast<uint32_t>(slot)) == false) {
       osp::DebugShell::Printf("slot not active\r\n");
       return -1;
     }
@@ -499,7 +499,7 @@ int CmdReset(int argc, char** argv) noexcept {
 }
 
 int CmdTrace(int argc, char** argv) noexcept {
-  if (!RequireServer()) {
+  if (RequireServer() == false) {
     return -1;
   }
   if (argc != 3) {
@@ -507,7 +507,7 @@ int CmdTrace(int argc, char** argv) noexcept {
     return -1;
   }
   uint32_t slot = 0U;
-  if (!ParseU32(argv[1], slot) || slot >= kMaxConnections) {
+  if (ParseU32(argv[1], slot) == false || slot >= kMaxConnections) {
     osp::DebugShell::Printf("invalid slot\r\n");
     return -1;
   }
@@ -518,7 +518,7 @@ int CmdTrace(int argc, char** argv) noexcept {
     osp::DebugShell::Printf("usage: trace <slot> on|off\r\n");
     return -1;
   }
-  if (!SlotActive(ShellSnapshot(), static_cast<uint32_t>(slot))) {
+  if (SlotActive(ShellSnapshot(), static_cast<uint32_t>(slot)) == false) {
     osp::DebugShell::Printf("slot not active\r\n");
     return -1;
   }
@@ -535,10 +535,10 @@ int CmdTrace(int argc, char** argv) noexcept {
 int CmdIdr(int argc, char** argv) noexcept {
   static_cast<void>(argc);
   static_cast<void>(argv);
-  if (!RequireServer()) {
+  if (RequireServer() == false) {
     return -1;
   }
-  if (!ShellSnapshot().idr_hook_set) {
+  if (ShellSnapshot().idr_hook_set == false) {
     osp::DebugShell::Printf("idr: no encoder hook registered\r\n");
     return -1;
   }
@@ -550,7 +550,7 @@ int CmdIdr(int argc, char** argv) noexcept {
 int CmdShutdown(int argc, char** argv) noexcept {
   static_cast<void>(argc);
   static_cast<void>(argv);
-  if (!RequireServer()) {
+  if (RequireServer() == false) {
     return -1;
   }
   Server()->RequestStop();
@@ -560,7 +560,7 @@ int CmdShutdown(int argc, char** argv) noexcept {
 
 #if defined(RS_ENABLE_FAULT_INJECTION)
 int CmdFault(int argc, char** argv) noexcept {
-  if (!RequireServer()) {
+  if (RequireServer() == false) {
     return -1;
   }
   if (argc < 3) {
@@ -570,7 +570,7 @@ int CmdFault(int argc, char** argv) noexcept {
   }
   if (std::strcmp(argv[1], "drop") == 0 && argc == 3) {
     uint32_t n = 0U;
-    if (!ParseU32(argv[2], n)) {
+    if (ParseU32(argv[2], n) == false) {
       osp::DebugShell::Printf("invalid count\r\n");
       return -1;
     }
@@ -584,16 +584,16 @@ int CmdFault(int argc, char** argv) noexcept {
     return -1;
   }
   uint32_t slot = 0U;
-  if (!ParseU32(argv[2], slot) || slot >= kMaxConnections) {
+  if (ParseU32(argv[2], slot) == false || slot >= kMaxConnections) {
     osp::DebugShell::Printf("invalid slot\r\n");
     return -1;
   }
-  if (!SlotActive(ShellSnapshot(), static_cast<uint32_t>(slot))) {
+  if (SlotActive(ShellSnapshot(), static_cast<uint32_t>(slot)) == false) {
     osp::DebugShell::Printf("slot not active\r\n");
     return -1;
   }
   uint32_t arg = 0U;
-  if (!ParseU32(argv[3], arg)) {
+  if (ParseU32(argv[3], arg) == false) {
     osp::DebugShell::Printf("invalid argument\r\n");
     return -1;
   }
@@ -616,7 +616,7 @@ int CmdFault(int argc, char** argv) noexcept {
 }
 
 int CmdSlow(int argc, char** argv) noexcept {
-  if (!RequireServer()) {
+  if (RequireServer() == false) {
     return -1;
   }
   if (argc != 4 || std::strcmp(argv[1], "slow") != 0) {
@@ -624,16 +624,16 @@ int CmdSlow(int argc, char** argv) noexcept {
     return -1;
   }
   uint32_t slot = 0U;
-  if (!ParseU32(argv[2], slot) || slot >= kMaxConnections) {
+  if (ParseU32(argv[2], slot) == false || slot >= kMaxConnections) {
     osp::DebugShell::Printf("invalid slot\r\n");
     return -1;
   }
-  if (!SlotActive(ShellSnapshot(), static_cast<uint32_t>(slot))) {
+  if (SlotActive(ShellSnapshot(), static_cast<uint32_t>(slot)) == false) {
     osp::DebugShell::Printf("slot not active\r\n");
     return -1;
   }
   uint32_t bps = 0U;
-  if (!ParseU32(argv[3], bps)) {
+  if (ParseU32(argv[3], bps) == false) {
     osp::DebugShell::Printf("invalid bps\r\n");
     return -1;
   }

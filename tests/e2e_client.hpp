@@ -58,7 +58,7 @@ class Client {
                const std::string& body, std::string& err);
   bool ReadResponse(Response& out, int timeout_ms, std::string& err);
   bool ReadInterleaved(MediaFrame& out, int timeout_ms, std::string& err);
-  bool HasPendingMedia() const noexcept { return !media_.empty(); }
+  bool HasPendingMedia() const noexcept { return media_.empty() == false; }
 
   // True when the peer closed the connection (EOF observed).
   bool PeerClosed() const noexcept { return peer_closed_; }

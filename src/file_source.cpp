@@ -152,7 +152,7 @@ osp::expected<FileSourceInfo, FileSourceError> FileSource::Open(const char* path
 
   Codec detected = Codec::kUnknown;
   const size_t probe_len = std::fread(au_buf_, 1U, 65536U, file_);
-  if (probe_len < 4U || !DetectCodec(au_buf_, static_cast<uint32_t>(probe_len), detected) ||
+  if (probe_len < 4U || DetectCodec(au_buf_, static_cast<uint32_t>(probe_len), detected) == false ||
       detected == Codec::kUnknown || (expected != Codec::kUnknown && expected != detected)) {
     std::fclose(file_);
     file_ = nullptr;
@@ -166,7 +166,7 @@ osp::expected<FileSourceInfo, FileSourceError> FileSource::Open(const char* path
 
   params_ = TrackParams{};
   params_.codec = detected;
-  if (!LoadParamSets() || !ValidateParamSets(params_)) {
+  if (LoadParamSets() == false || ValidateParamSets(params_) == false) {
     std::fclose(file_);
     file_ = nullptr;
     return osp::expected<FileSourceInfo, FileSourceError>::error(FileSourceError::kMissingParams);
@@ -198,7 +198,7 @@ bool FileSource::LoadParamSets() noexcept {
   uint64_t scanned = 0U;
   bool eof = false;
   bool ok = true;
-  while (ok && !eof && got != need && scanned < kParamScanLimit) {
+  while (ok && eof == false && got != need && scanned < kParamScanLimit) {
     const size_t n = std::fread(chunk + carry, 1U, kScanBufferBytes - carry, file_);
     eof = (n == 0U);
     const uint32_t len = carry + static_cast<uint32_t>(n);
@@ -215,7 +215,7 @@ bool FileSource::LoadParamSets() noexcept {
       const uint32_t bit = ParamSetBit(codec, chunk + ns, len - ns);
       uint32_t next = FindStartCodePos(chunk, len, ns + (h265 ? 2U : 1U));
       if (next == kNotFound) {
-        if (!eof) {
+        if (eof == false) {
           if (bit != 0U && (len - ns) > kMaxParamSetBytes) {
             ok = false;
           } else if (bit == 0U) {
@@ -389,7 +389,7 @@ void FileSource::SubmitAu(uint32_t start, uint32_t len, uint64_t pts_ns) noexcep
     return;
   }
   auto acquired = ingress_->Acquire(len);
-  if (!acquired.has_value()) {
+  if (acquired.has_value() == false) {
     NotifyDrop();
     return;
   }
@@ -403,7 +403,7 @@ void FileSource::SubmitAu(uint32_t start, uint32_t len, uint64_t pts_ns) noexcep
   writer.desc.pts_ns = pts_ns;
   writer.desc.flags = ScanAuFlags(au_buf_ + start, len, params_.codec);
   auto committed = ingress_->Commit(writer, len);
-  if (!committed.has_value()) {
+  if (committed.has_value() == false) {
     ingress_->Abort(writer);
     NotifyDrop();
     return;
@@ -415,9 +415,9 @@ void FileSource::SubmitAu(uint32_t start, uint32_t len, uint64_t pts_ns) noexcep
 
 void FileSource::SourceMain() noexcept {
   uint64_t next_ns = osp::SteadyNowNs();
-  while (!stop_.load(std::memory_order_acquire)) {
+  while (stop_.load(std::memory_order_acquire) == false) {
     uint32_t len = 0U;
-    if (!ReadNextAu(len)) {
+    if (ReadNextAu(len) == false) {
       if (std::fseek(file_, 0, SEEK_SET) != 0) {
         NotifyError(static_cast<uint32_t>(errno));
         break;
@@ -426,7 +426,7 @@ void FileSource::SourceMain() noexcept {
       au_off_ = 0U;
       au_len_ = 0U;
       au_resync_ = false;
-      if (!ReadNextAu(len)) {
+      if (ReadNextAu(len) == false) {
         break;
       }
     }
@@ -439,7 +439,7 @@ void FileSource::SourceMain() noexcept {
     if (now > next_ns + 1000000000ULL) {
       next_ns = now;
     }
-    while (!stop_.load(std::memory_order_acquire) && osp::SteadyNowNs() < next_ns) {
+    while (stop_.load(std::memory_order_acquire) == false && osp::SteadyNowNs() < next_ns) {
       const struct timespec pause{0, static_cast<long>(kSourcePollNs)};
       static_cast<void>(nanosleep(&pause, nullptr));
     }

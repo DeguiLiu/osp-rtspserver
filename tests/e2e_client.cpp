@@ -162,7 +162,7 @@ bool Client::Connect(const std::string& host, uint16_t port, int timeout_ms, std
   constexpr uint32_t kConnectAttempts = 3U;
   bool ok = false;
   std::string last_err = "connect failed";
-  for (uint32_t attempt = 0U; attempt < kConnectAttempts && !ok; ++attempt) {
+  for (uint32_t attempt = 0U; attempt < kConnectAttempts && ok == false; ++attempt) {
     fd_ = ::socket(AF_INET, SOCK_STREAM, 0);
     if (fd_ < 0) {
       last_err = std::string("socket: ") + std::strerror(errno);
@@ -192,13 +192,13 @@ bool Client::Connect(const std::string& host, uint16_t port, int timeout_ms, std
         last_err = std::strerror(errno);
       }
     }
-    if (!ok) {
+    if (ok == false) {
       Close();
       struct timespec pause{0, 50000000};
       static_cast<void>(::nanosleep(&pause, nullptr));
     }
   }
-  if (!ok) {
+  if (ok == false) {
     err = "connect to " + host + ":" + std::to_string(port) + " failed: " + last_err;
   } else {
     const int one = 1;
@@ -243,7 +243,7 @@ bool Client::Request(const std::string& method, const std::string& uri, const st
     request += header;
     request += "\r\n";
   }
-  if (!body.empty() || "DESCRIBE" == method) {
+  if (body.empty() == false || "DESCRIBE" == method) {
     request += "Content-Length: " + std::to_string(body.size()) + "\r\n";
   }
   request += "\r\n";
@@ -291,7 +291,7 @@ bool Client::PumpOnce(bool& consumed, std::string& err) {
     constexpr size_t kStatusPrefix = 9U;  // "RTSP/1.0 "
     const bool looks_like_status =
         (avail >= kStatusPrefix) ? StartsWith(data, avail, "RTSP/1.0 ") : (0 == std::memcmp(data, "RTSP/1.0 ", avail));
-    if (!looks_like_status) {
+    if (looks_like_status == false) {
       char byte_text[16];
       std::snprintf(byte_text, sizeof(byte_text), "0x%02X", data[0]);
       err = std::string("unexpected byte ") + byte_text + " while waiting for RTSP data";
@@ -330,14 +330,14 @@ bool Client::PumpOnce(bool& consumed, std::string& err) {
         }
         size_t body_len = 0U;
         ok = ParseContentLength(headers, body_len);
-        if (!ok) {
+        if (ok == false) {
           err = "invalid Content-Length in response";
         } else if (avail < head_len + body_len) {
           return true;
         } else {
           response.headers = std::move(headers);
           response.body.assign(reinterpret_cast<const char*>(data + head_len), body_len);
-          if (!awaiting_response_) {
+          if (awaiting_response_ == false) {
             ++stray_responses_;
           }
           responses_.push_back(std::move(response));
@@ -357,7 +357,7 @@ bool Client::Fill(int timeout_ms, std::string& err) {
   const int64_t deadline = NowMs() + timeout_ms;
   bool ok = true;
   bool got_data = false;
-  while (ok && !got_data) {
+  while (ok && got_data == false) {
     struct pollfd pfd{};
     pfd.fd = fd_;
     pfd.events = POLLIN;
@@ -407,8 +407,8 @@ bool Client::PumpUntil(bool need_response, int timeout_ms, std::string& err) {
     while (ok && consumed) {
       ok = PumpOnce(consumed, err);
     }
-    const bool ready = need_response ? !responses_.empty() : !media_.empty();
-    if (!ok || ready) {
+    const bool ready = need_response ? responses_.empty() == false : media_.empty() == false;
+    if (ok == false || ready) {
       break;
     }
     const int wait_ms = RemainingMs(deadline);
@@ -429,7 +429,7 @@ bool Client::ReadResponse(Response& out, int timeout_ms, std::string& err) {
     ok = PumpUntil(true, timeout_ms, err);
     awaiting_response_ = false;
   }
-  if (ok && !responses_.empty()) {
+  if (ok && responses_.empty() == false) {
     out = std::move(responses_.front());
     responses_.pop_front();
   } else if (ok) {
@@ -444,7 +444,7 @@ bool Client::ReadInterleaved(MediaFrame& out, int timeout_ms, std::string& err) 
   if (media_.empty()) {
     ok = PumpUntil(false, timeout_ms, err);
   }
-  if (ok && !media_.empty()) {
+  if (ok && media_.empty() == false) {
     out = std::move(media_.front());
     media_.pop_front();
   } else if (ok) {
@@ -486,7 +486,7 @@ bool ParseRtp(const uint8_t* data, size_t len, RtpPacket& out) {
     out.timestamp = (static_cast<uint32_t>(data[4]) << 24U) | (static_cast<uint32_t>(data[5]) << 16U) |
                     (static_cast<uint32_t>(data[6]) << 8U) | data[7];
     out.payload.assign(data + header_len, data + len - padding);
-    out.valid = !out.payload.empty();
+    out.valid = out.payload.empty() == false;
   }
   return ok && out.valid;
 }
@@ -676,10 +676,10 @@ bool CodecFromSdp(const std::string& sdp, Codec& out) {
   const bool h265 = (std::string::npos != sdp.find("H265/")) || (std::string::npos != sdp.find("sprop-vps="));
   const bool h264 = (std::string::npos != sdp.find("H264/"));
   bool ok = false;
-  if (h265 && !h264) {
+  if (h265 && h264 == false) {
     out = Codec::kH265;
     ok = true;
-  } else if (h264 && !h265) {
+  } else if (h264 && h265 == false) {
     out = Codec::kH264;
     ok = true;
   }
@@ -753,7 +753,7 @@ std::vector<NalUnit> NormalizeForCompare(const std::vector<NalUnit>& nals, Codec
   std::vector<NalUnit> out;
   out.reserve(nals.size());
   for (const auto& nal : nals) {
-    if (!IsAudType(codec, nal.type) && !IsSeiType(codec, nal.type)) {
+    if (IsAudType(codec, nal.type) == false && IsSeiType(codec, nal.type) == false) {
       NalUnit copy = nal;
       // Design 13.5 allows trailing zero bytes from Annex B framing.
       while (copy.bytes.size() > 1U && 0U == copy.bytes.back()) {
@@ -779,13 +779,13 @@ bool LoadStreamFile(const std::string& path, Codec codec, StreamFile& out, std::
     }
     std::fclose(file);
   }
-  if (!ok) {
+  if (ok == false) {
     err = "cannot read stream file " + path;
   } else {
     out.nals = SplitAnnexB(data, codec);
     out.aus = GroupAus(out.nals, codec);
-    ok = !out.nals.empty();
-    if (!ok) {
+    ok = out.nals.empty() == false;
+    if (ok == false) {
       err = "stream file " + path + " contains no Annex B NAL units";
     }
   }
@@ -835,11 +835,11 @@ bool RunProcess(const std::vector<std::string>& argv, int timeout_ms, std::strin
   char err_path[] = "/tmp/rs_proc_err_XXXXXX";
   const int out_fd = ::mkstemp(out_path);
   const int err_fd = ::mkstemp(err_path);
-  bool ok = (out_fd >= 0) && (err_fd >= 0) && !argv.empty();
+  bool ok = (out_fd >= 0) && (err_fd >= 0) && argv.empty() == false;
   stdout_log.clear();
   stderr_log.clear();
   exit_code = -1;
-  if (!ok) {
+  if (ok == false) {
     if (out_fd >= 0) {
       ::close(out_fd);
     }
@@ -879,7 +879,7 @@ bool RunProcess(const std::vector<std::string>& argv, int timeout_ms, std::strin
       const int64_t deadline = NowMs() + timeout_ms;
       int status = 0;
       bool reaped = false;
-      while (!reaped) {
+      while (reaped == false) {
         const pid_t waited = ::waitpid(pid, &status, WNOHANG);
         if (pid == waited) {
           reaped = true;

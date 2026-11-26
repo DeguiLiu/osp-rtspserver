@@ -150,7 +150,7 @@ int main(int argc, char** argv) {
       args_ok = false;
     }
   }
-  if (!args_ok || nullptr == out_path) {
+  if (args_ok == false || nullptr == out_path) {
     Usage(argv[0]);
     return 2;
   }
@@ -220,7 +220,7 @@ int main(int argc, char** argv) {
     total_bytes += au.size();
   }
   const bool close_ok = (0 == std::fclose(stream_file)) && (0 == std::fclose(expect_file));
-  if (!write_ok || !close_ok) {
+  if (write_ok == false || close_ok == false) {
     std::fprintf(stderr, "make_test_stream: write failed\n");
     return 2;
   }

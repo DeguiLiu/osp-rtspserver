@@ -128,7 +128,7 @@ bool GuardListenerReady(Context& c, const void* /*data*/) noexcept {
 // state is data, never a return value.
 void ActStartReady(Context& c, const void* /*data*/) noexcept {
   c.trace.Push(HsmStepKind::kAction, kReady);
-  if (!c.listener_ready) {
+  if (c.listener_ready == false) {
     ++c.rejects;
     return;
   }
@@ -216,11 +216,11 @@ void Hsm::Restart() noexcept {
 }
 
 bool Hsm::Dispatch(uint32_t event) noexcept {
-  if (!started_) {
+  if (started_ == false) {
     ++ctx_.rejects;
     return false;
   }
-  if (!MatchRow(kStates, kTransitions, kTransitionCount, hsm_.CurrentState(), event, ctx_, nullptr)) {
+  if (MatchRow(kStates, kTransitions, kTransitionCount, hsm_.CurrentState(), event, ctx_, nullptr) == false) {
     ++ctx_.rejects;
     return false;
   }
@@ -293,7 +293,7 @@ bool GuardSetupOk(Context& c, const void* /*data*/) noexcept {
 // Ready. On failure the state is unchanged and the rollback is recorded.
 void ActSetupOk(Context& c, const void* /*data*/) noexcept {
   c.trace.Push(HsmStepKind::kAction, kReady);
-  if (!c.setup_ok) {
+  if (c.setup_ok == false) {
     ++c.rollbacks;
     return;
   }
@@ -404,11 +404,11 @@ void Hsm::Restart() noexcept {
 }
 
 bool Hsm::Dispatch(uint32_t event) noexcept {
-  if (!started_) {
+  if (started_ == false) {
     ++ctx_.rejects;
     return false;
   }
-  if (!MatchRow(kStates, kTransitions, kTransitionCount, hsm_.CurrentState(), event, ctx_, nullptr)) {
+  if (MatchRow(kStates, kTransitions, kTransitionCount, hsm_.CurrentState(), event, ctx_, nullptr) == false) {
     ++ctx_.rejects;
     return false;
   }

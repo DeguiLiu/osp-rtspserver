@@ -113,7 +113,7 @@ int main(int argc, char** argv) {
     const bool has_value = (i + 1) < argc;
     if (arg == "--port" && has_value) {
       uint32_t port = 0U;
-      if (!ParseU32(argv[++i], port) || port > rs::kMaxPortNumber) {
+      if (ParseU32(argv[++i], port) == false || port > rs::kMaxPortNumber) {
         PrintUsage(argv[0]);
         return 2;
       }
@@ -126,7 +126,7 @@ int main(int argc, char** argv) {
       have_ip = true;
     } else if (arg == "--clients" && has_value) {
       uint32_t clients = 0U;
-      if (!ParseU32(argv[++i], clients) || clients > rs::kMaxConnections) {
+      if (ParseU32(argv[++i], clients) == false || clients > rs::kMaxConnections) {
         OSP_LOG_ERROR("main", "--clients must be 1..%" PRIu32, static_cast<uint32_t>(rs::kMaxConnections));
         return 2;
       }
@@ -146,7 +146,7 @@ int main(int argc, char** argv) {
 #if defined(RS_ENABLE_DEBUG_SHELL)
     } else if (arg == "--shell-port" && has_value) {
       uint32_t port = 0U;
-      if (!ParseU32(argv[++i], port) || port > rs::kMaxPortNumber) {
+      if (ParseU32(argv[++i], port) == false || port > rs::kMaxPortNumber) {
         PrintUsage(argv[0]);
         return 2;
       }
@@ -159,7 +159,7 @@ int main(int argc, char** argv) {
       return 2;
     }
   }
-  if (!have_file || !have_ip) {
+  if (have_file == false || have_ip == false) {
     PrintUsage(argv[0]);
     return 2;
   }
@@ -179,7 +179,7 @@ int main(int argc, char** argv) {
       ::new (static_cast<void*>(source_buffer)) rs::FileSource, destroy_source};
   rs::FileSource& source = *source_storage;
   auto opened = source.Open(file_path, cfg.codec);
-  if (!opened.has_value()) {
+  if (opened.has_value() == false) {
     OSP_LOG_ERROR("main", "cannot open stream %s (error %" PRIu32 ")", file_path,
                   static_cast<uint32_t>(opened.get_error()));
     return 1;
@@ -192,7 +192,7 @@ int main(int argc, char** argv) {
       ::new (static_cast<void*>(server_buffer)) rs::RtspServer, destroy_server};
   rs::RtspServer& server = *server_storage;
   auto started = server.Start(cfg);
-  if (!started.has_value()) {
+  if (started.has_value() == false) {
     OSP_LOG_ERROR("main", "start failed (error %" PRIu32 "), check --file and --ip",
                   static_cast<uint32_t>(started.get_error()));
     return 1;
@@ -206,7 +206,7 @@ int main(int argc, char** argv) {
                static_cast<uint32_t>(stats.pps_len));
 
   auto source_started = source.Start(server.Ingress(), server.Callbacks());
-  if (!source_started.has_value()) {
+  if (source_started.has_value() == false) {
     OSP_LOG_ERROR("main", "source thread start failed (error %" PRIu32 ")",
                   static_cast<uint32_t>(source_started.get_error()));
     server.Stop();
@@ -225,7 +225,7 @@ int main(int argc, char** argv) {
     shell_cfg.bind_ip = shell_bind;
     shell = std::make_unique<osp::DebugShell>(shell_cfg);
     auto shell_started = shell->Start();
-    if (!shell_started.has_value()) {
+    if (shell_started.has_value() == false) {
       OSP_LOG_ERROR("main", "debug shell start failed on %s:%" PRIu32 " (error %" PRIu32 ")", shell_bind,
                     static_cast<uint32_t>(shell_port), static_cast<uint32_t>(shell_started.get_error()));
       shell.reset();
@@ -237,7 +237,7 @@ int main(int argc, char** argv) {
 
   const uint64_t period = static_cast<uint64_t>(rs::kStatsLogPeriodMs) * rs::kNsPerMs;
   uint64_t next_log = osp::SteadyNowNs() + period;
-  while (g_stop == 0 && !server.StopRequested()) {
+  while (g_stop == 0 && server.StopRequested() == false) {
     uint32_t sleep_ms = rs::kMaintenancePeriodMs;
     const uint64_t now = osp::SteadyNowNs();
     if (now >= next_log) {

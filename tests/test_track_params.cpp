@@ -97,7 +97,7 @@ bool WaitFor(const rs::RtspServer& server, bool want_param_gen2, uint32_t timeou
   const uint32_t step_ms = 20U;
   for (uint32_t waited = 0U; waited <= timeout_ms; waited += step_ms) {
     const rs::ServerSnapshot s = server.Snapshot();
-    const bool gen_ok = !want_param_gen2 || s.stats.param_gen == 2U;
+    const bool gen_ok = want_param_gen2 == false || s.stats.param_gen == 2U;
     if (gen_ok && s.stats.connections_active == 0U) {
       return true;
     }
@@ -152,7 +152,7 @@ int main() {
   const std::string setup_rsp = ReadResponse(client);
   RS_CHECK(setup_rsp.find("200 OK") != std::string::npos);
   const std::string session = HeaderValue(setup_rsp, "Session");
-  RS_CHECK(!session.empty());
+  RS_CHECK(session.empty() == false);
   char play[320];
   std::snprintf(play, sizeof(play),
                 "PLAY rtsp://127.0.0.1:%" PRIu32
@@ -176,7 +176,7 @@ int main() {
   // Too-long parameter sets are rejected before any copy.
   rs::TrackParams bad = MakeParams(g_new_sps);
   bad.sps_len = rs::kMaxParamSetBytes + 1U;
-  RS_CHECK(!server.UpdateTrackParams(bad).has_value());
+  RS_CHECK(server.UpdateTrackParams(bad).has_value() == false);
   RS_CHECK_EQ(server.Stats().param_gen, 1U);
 
   RS_CHECK(server.UpdateTrackParams(MakeParams(g_new_sps)).has_value());

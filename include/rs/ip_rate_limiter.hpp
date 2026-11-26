@@ -46,7 +46,7 @@ class IpRateLimiter final {
       if (entries_[i].used && entries_[i].ip == ip) {
         return entries_[i];
       }
-      if (!entries_[i].used) {
+      if (entries_[i].used == false) {
         entries_[i] = Entry{};
         entries_[i].ip = ip;
         entries_[i].used = true;

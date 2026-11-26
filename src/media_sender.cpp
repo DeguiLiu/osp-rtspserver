@@ -144,7 +144,7 @@ MediaSender::EnqueueResult MediaSender::OnFrame(const FrameDesc& desc, uint64_t 
   if (ingress_ == nullptr) {
     return EnqueueResult::kNoRef;
   }
-  if (!ingress_->AddRef(desc)) {
+  if (ingress_->AddRef(desc) == false) {
     return EnqueueResult::kNoRef;
   }
   if (queue_count_ >= kFrameQueueDepth) {
@@ -188,7 +188,7 @@ bool MediaSender::TakeNext(uint64_t now_ns, uint16_t next_seq, uint32_t ssrc) no
   queue_head_ = (queue_head_ + 1U) % kFrameQueueDepth;
   --queue_count_;
   has_current_ = true;
-  if (!rtp_base_set_) {
+  if (rtp_base_set_ == false) {
     rtp_base_pts_ns_ = current_.pts_ns;
     rtp_base_ts_ = ssrc ^ 0x5A5A0000U;
     rtp_base_set_ = true;
@@ -200,7 +200,7 @@ bool MediaSender::TakeNext(uint64_t now_ns, uint16_t next_seq, uint32_t ssrc) no
 }
 
 const uint8_t* MediaSender::Data() const noexcept {
-  if (!has_current_ || ingress_ == nullptr) {
+  if (has_current_ == false || ingress_ == nullptr) {
     return nullptr;
   }
   return ingress_->Data(current_);
@@ -215,7 +215,7 @@ void MediaSender::ReleaseCurrent() noexcept {
 }
 
 osp::expected<RtpPacket, PacketizeError> MediaSender::NextPacket(uint32_t ssrc) noexcept {
-  if (!has_current_) {
+  if (has_current_ == false) {
     return osp::expected<RtpPacket, PacketizeError>::error(PacketizeError::kEndOfAu);
   }
   const uint8_t* au = Data();
@@ -240,7 +240,7 @@ void MediaSender::DropToAwaitIdr() noexcept {
 }
 
 bool MediaSender::Admit(uint32_t bytes, uint64_t now_ns) noexcept {
-  return !client_bucket_.IsConfigured() || client_bucket_.TryConsume(bytes, now_ns);
+  return client_bucket_.IsConfigured() == false || client_bucket_.TryConsume(bytes, now_ns);
 }
 
 void MediaSender::SetSlowBps(uint32_t bps, uint64_t now_ns) noexcept {

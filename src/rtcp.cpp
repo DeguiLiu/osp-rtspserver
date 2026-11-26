@@ -93,7 +93,7 @@ bool ParsePacket(const uint8_t* packet, uint32_t bytes, bool first, RtcpSummary&
       ok = (kReceiverReportHeaderBytes + static_cast<uint32_t>(block_count) * kReportBlockBytes) <= bytes;
       if (ok) {
         ++summary.receiver_reports;
-        if ((0U < block_count) && !summary.has_rr) {
+        if ((0U < block_count) && summary.has_rr == false) {
           ReadReportBlock(packet + kReceiverReportHeaderBytes, summary.first_rr);
           summary.has_rr = true;
         }
@@ -136,7 +136,7 @@ osp::expected<uint32_t, RtcpError> BuildSenderReport(osp::writable_byte_span out
 
 osp::expected<RrReport, RtcpError> ParseReceiverReport(const uint8_t* data, uint32_t len) noexcept {
   const auto summary = ParseCompound(data, len);
-  if (!summary.has_value() || !summary.value().has_rr) {
+  if (summary.has_value() == false || summary.value().has_rr == false) {
     return osp::expected<RrReport, RtcpError>::error(RtcpError::kMalformed);
   }
   return osp::expected<RrReport, RtcpError>::success(summary.value().first_rr);
@@ -162,7 +162,7 @@ osp::expected<RtcpSummary, RtcpError> ParseCompound(const uint8_t* data, uint32_
     first = false;
     offset += packet_bytes;
   }
-  if (!ok) {
+  if (ok == false) {
     return osp::expected<RtcpSummary, RtcpError>::error(RtcpError::kMalformed);
   }
   return osp::expected<RtcpSummary, RtcpError>::success(summary);
@@ -181,7 +181,7 @@ osp::expected<uint32_t, RtcpError> BuildSenderReportWithSdes(osp::writable_byte_
     return osp::expected<uint32_t, RtcpError>::error(RtcpError::kBufferTooSmall);
   }
   const auto sr = BuildSenderReport(out, ssrc, ntp_now_ns, rtp_ts, packet_count, octet_count);
-  if (!sr.has_value()) {
+  if (sr.has_value() == false) {
     return osp::expected<uint32_t, RtcpError>::error(sr.get_error());
   }
   uint8_t* sdes = reinterpret_cast<uint8_t*>(out.data()) + kSenderReportBytes;

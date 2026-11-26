@@ -126,7 +126,7 @@ bool CountHeaderLines(const uint8_t* p, uint32_t len, uint32_t& count) noexcept 
       pos = len;
     } else if (' ' == p[pos] || '\t' == p[pos]) {
       ok = false;
-    } else if (!FindCrlf(p, pos, len, eol)) {
+    } else if (FindCrlf(p, pos, len, eol) == false) {
       ok = false;
     } else {
       ++n;
@@ -217,7 +217,7 @@ osp::expected<void, ParseError> RtspParser::Feed(const uint8_t* data, uint32_t l
   // Make room by consuming complete messages before declaring overflow.
   if (len > (kRtspRxBytes - len_)) {
     const auto drained = Drain(cb);
-    if (!drained) {
+    if (drained.has_value() == false) {
       return drained;
     }
   }
@@ -258,7 +258,7 @@ osp::expected<void, ParseError> RtspParser::Drain(const ParserCallbacks& cb) noe
       }
     } else {
       uint32_t head_end = 0U;
-      if (!FindCrlfCrlf(buf_, pos, len_, head_end)) {
+      if (FindCrlfCrlf(buf_, pos, len_, head_end) == false) {
         if ((len_ - pos) > kMaxHeaderBytes) {
           ok = false;
         }
@@ -266,7 +266,7 @@ osp::expected<void, ParseError> RtspParser::Drain(const ParserCallbacks& cb) noe
       }
       const uint32_t head_len = head_end + 4U - pos;
       uint32_t header_count = 0U;
-      if (head_len > kMaxHeaderBytes || !CountHeaderLines(buf_ + pos, head_len, header_count)) {
+      if (head_len > kMaxHeaderBytes || CountHeaderLines(buf_ + pos, head_len, header_count) == false) {
         ok = false;
       } else if (header_count > kMaxHeaderCount) {
         ok = false;
@@ -274,7 +274,7 @@ osp::expected<void, ParseError> RtspParser::Drain(const ParserCallbacks& cb) noe
       } else {
         request_.~RtspRequest();
         RtspRequest& req = *::new (static_cast<void*>(&request_)) RtspRequest{};
-        if (!ParseHead(reinterpret_cast<const char*>(buf_ + pos), head_len, req)) {
+        if (ParseHead(reinterpret_cast<const char*>(buf_ + pos), head_len, req) == false) {
           ok = false;
         } else {
           uint32_t body_len = 0U;
@@ -282,7 +282,7 @@ osp::expected<void, ParseError> RtspParser::Drain(const ParserCallbacks& cb) noe
           for (uint8_t i = 0U; ok && i < req.header_count; ++i) {
             if (EqualsIgnoreCase(req.headers[i].name, "content-length")) {
               uint32_t value = 0U;
-              if (!ParseDecimal(req.headers[i].value, value) || (have_length && value != body_len)) {
+              if (ParseDecimal(req.headers[i].value, value) == false || (have_length && value != body_len)) {
                 ok = false;
               } else {
                 body_len = value;
@@ -308,7 +308,7 @@ osp::expected<void, ParseError> RtspParser::Drain(const ParserCallbacks& cb) noe
       }
     }
   }
-  if (!ok) {
+  if (ok == false) {
     len_ = 0U;  // The connection is closed by the owner; drop the partial bytes.
     return osp::expected<void, ParseError>::error(err);
   }
@@ -325,7 +325,7 @@ osp::expected<void, ParseError> RtspParser::Drain(const ParserCallbacks& cb) noe
 bool RtspParser::ParseHead(const char* head, uint32_t head_len, RtspRequest& req) noexcept {
   const uint8_t* p = reinterpret_cast<const uint8_t*>(head);
   uint32_t eol = 0U;
-  if (!FindCrlf(p, 0U, head_len, eol) || !ParseStartLine(p, eol, req)) {
+  if (FindCrlf(p, 0U, head_len, eol) == false || ParseStartLine(p, eol, req) == false) {
     return false;
   }
   uint32_t pos = eol + 2U;
@@ -336,11 +336,11 @@ bool RtspParser::ParseHead(const char* head, uint32_t head_len, RtspRequest& req
       pos = head_len;
     } else {
       uint32_t line_end = 0U;
-      if (!FindCrlf(p, pos, head_len, line_end)) {
+      if (FindCrlf(p, pos, head_len, line_end) == false) {
         ok = false;
       } else if (req.header_count >= kMaxHeaderCount) {
         ok = false;
-      } else if (!ParseHeaderLine(p, pos, line_end, req.headers[req.header_count])) {
+      } else if (ParseHeaderLine(p, pos, line_end, req.headers[req.header_count]) == false) {
         ok = false;
       } else {
         ++req.header_count;
@@ -353,7 +353,7 @@ bool RtspParser::ParseHead(const char* head, uint32_t head_len, RtspRequest& req
 
 bool GetHeader(const RtspRequest& req, const char* name, osp::byte_span& out) noexcept {
   bool found = false;
-  for (uint8_t i = 0U; nullptr != name && !found && i < req.header_count; ++i) {
+  for (uint8_t i = 0U; nullptr != name && found == false && i < req.header_count; ++i) {
     if (EqualsIgnoreCase(req.headers[i].name, name)) {
       out = req.headers[i].value;
       found = true;

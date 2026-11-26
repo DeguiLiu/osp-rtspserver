@@ -19,7 +19,7 @@ constexpr uint8_t kNalTypeMask = 0x1FU;
 bool FindStartCode(const uint8_t* au, uint32_t from, uint32_t len, uint32_t& pos) noexcept {
   bool found = false;
   if (nullptr != au && from < len) {
-    for (uint32_t i = from; !found && (i + 2U) < len; ++i) {
+    for (uint32_t i = from; found == false && (i + 2U) < len; ++i) {
       if (0U == au[i] && 0U == au[i + 1U] && 1U == au[i + 2U]) {
         pos = i;
         found = true;
@@ -93,7 +93,7 @@ bool AuHasIdr(const uint8_t* au, uint32_t au_len) noexcept {
   uint32_t offset = 0U;
   NalUnit nal;
   bool found = false;
-  while (!found && NextNalUnit(au, au_len, offset, nal)) {
+  while (found == false && NextNalUnit(au, au_len, offset, nal)) {
     found = (static_cast<uint8_t>(NalType::kIdrSlice) == nal.type);
   }
   return found;
@@ -122,7 +122,7 @@ void H264Packetizer::StartAu(ClientCursor& cursor, uint32_t au_len, uint32_t ts,
 osp::expected<RtpPacket, PacketizeError> H264Packetizer::Next(const uint8_t* au, uint32_t au_len,
                                                               const ParamSets& params, ClientCursor& cursor,
                                                               uint32_t ssrc) noexcept {
-  if (!cursor.in_au) {
+  if (cursor.in_au == false) {
     return osp::expected<RtpPacket, PacketizeError>::error(PacketizeError::kEndOfAu);
   }
   if (cursor.param_stage < 2U) {
@@ -155,7 +155,7 @@ osp::expected<RtpPacket, PacketizeError> H264Packetizer::Next(const uint8_t* au,
   uint32_t next_offset = cursor.nal_offset;
   NalUnit nal;
   const bool have_nal = NextNalUnit(au, cursor.au_len, next_offset, nal);
-  if (!have_nal) {
+  if (have_nal == false) {
     cursor.in_au = false;
     return osp::expected<RtpPacket, PacketizeError>::error(
         OnlyZeros(au, cursor.nal_offset, cursor.au_len) ? PacketizeError::kEndOfAu : PacketizeError::kBadNal);
@@ -166,7 +166,7 @@ osp::expected<RtpPacket, PacketizeError> H264Packetizer::Next(const uint8_t* au,
   }
   const uint32_t nal_len = static_cast<uint32_t>(nal.data.size());
   if (0U == cursor.frag_offset && nal_len <= kRtpPayloadMax) {
-    const bool last = !HasNextNal(au, cursor.au_len, next_offset);
+    const bool last = HasNextNal(au, cursor.au_len, next_offset) == false;
     WriteRtpHeader(cursor, ssrc, last);
     RtpPacket packet;
     packet.header = cursor.rtp_header.data();
@@ -200,7 +200,7 @@ osp::expected<RtpPacket, PacketizeError> H264Packetizer::Next(const uint8_t* au,
   cursor.fu_header[0] = static_cast<uint8_t>((nal_header & 0xE0U) | kFuAType);
   cursor.fu_header[1] = static_cast<uint8_t>((first ? kFuStartMask : 0x00U) | (last_fragment ? kFuEndMask : 0x00U) |
                                              (nal_header & kNalTypeMask));
-  const bool last = last_fragment && !HasNextNal(au, cursor.au_len, next_offset);
+  const bool last = last_fragment && HasNextNal(au, cursor.au_len, next_offset) == false;
   WriteRtpHeader(cursor, ssrc, last);
   RtpPacket packet;
   packet.header = cursor.rtp_header.data();

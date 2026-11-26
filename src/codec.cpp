@@ -93,7 +93,7 @@ bool DetectCodec(const uint8_t* au, uint32_t au_len, Codec& out) noexcept {
     return false;
   }
   StartCode sc{};
-  if (!FindStartCode(au, au_len, 0U, sc)) {
+  if (FindStartCode(au, au_len, 0U, sc) == false) {
     return false;
   }
   uint32_t probes = 0U;
@@ -117,16 +117,16 @@ bool DetectCodec(const uint8_t* au, uint32_t au_len, Codec& out) noexcept {
         out = Codec::kH264;
         return true;
       }
-      if (h265_ok && !h264_ok) {
+      if (h265_ok && h264_ok == false) {
         out = Codec::kH265;
         return true;
       }
-      if (h264_ok && !h265_ok) {
+      if (h264_ok && h265_ok == false) {
         out = Codec::kH264;
         return true;
       }
     }
-    if (!has_next) {
+    if (has_next == false) {
       break;
     }
     sc = next;

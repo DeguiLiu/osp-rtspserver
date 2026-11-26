@@ -35,7 +35,7 @@ osp::expected<FrameIngress::Writer, IngressError> FrameIngress::Acquire(uint32_t
   int32_t slot = spare_slot_;
   if (slot < 0) {
     uint16_t popped = 0U;
-    if (!empty_.Pop(popped)) {
+    if (empty_.Pop(popped) == false) {
       return osp::expected<Writer, IngressError>::error(IngressError::kNoSlot);
     }
     slot = static_cast<int32_t>(popped);
@@ -79,7 +79,7 @@ osp::expected<void, IngressError> FrameIngress::Commit(Writer& writer, uint32_t 
   slot_len_[slot] = actual_len;
   slot_refs_[slot] = 1U;  // Reference held by the loop once queued.
   writer.desc.length = actual_len;
-  if (!input_.Push(writer.desc)) {
+  if (input_.Push(writer.desc) == false) {
     slot_len_[slot] = 0U;
     slot_refs_[slot] = 0U;
     return osp::expected<void, IngressError>::error(IngressError::kFull);
@@ -128,7 +128,7 @@ bool FrameIngress::Pop(FrameDesc& out) noexcept {
 }
 
 bool FrameIngress::AddRef(const FrameDesc& desc) noexcept {
-  if (!Validate(desc)) {
+  if (Validate(desc) == false) {
     return false;
   }
   const uint16_t slot = desc.slot;
@@ -168,7 +168,7 @@ bool FrameIngress::Validate(const FrameDesc& desc) const noexcept {
 }
 
 const uint8_t* FrameIngress::Data(const FrameDesc& desc) const noexcept {
-  if (!Validate(desc)) {
+  if (Validate(desc) == false) {
     return nullptr;
   }
   return &pool_[desc.slot][0];
@@ -180,7 +180,7 @@ uint32_t FrameIngress::QueuedCount() const noexcept {
 
 bool FrameIngress::ConsumeFaultDrop() noexcept {
   uint32_t count = fault_drop_.load(std::memory_order_acquire);
-  while (count != 0U && !fault_drop_.compare_exchange_weak(count, count - 1U, std::memory_order_acq_rel)) {}
+  while (count != 0U && fault_drop_.compare_exchange_weak(count, count - 1U, std::memory_order_acq_rel) == false) {}
   return count != 0U;
 }
 
@@ -201,7 +201,7 @@ bool FrameIngress::ReturnSlot(uint16_t slot) noexcept {
   }
   slot_len_[slot] = 0U;
   slot_refs_[slot] = 0U;
-  if (!empty_.Push(slot)) {
+  if (empty_.Push(slot) == false) {
     // The queue covers every slot, so this only happens if the SPSC contract
     // was broken. Keep the slot out of circulation rather than corrupt state.
     static_cast<void>(loop_orphan_drops_.fetch_add(1U, std::memory_order_relaxed));

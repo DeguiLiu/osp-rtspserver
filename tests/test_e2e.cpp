@@ -151,7 +151,7 @@ bool ReadWholeFile(const std::string& path, std::string& out) {
 }
 
 void RemoveFile(const std::string& path) {
-  if (!path.empty()) {
+  if (path.empty() == false) {
     static_cast<void>(::unlink(path.c_str()));
   }
 }
@@ -190,7 +190,7 @@ bool VerifyExpectFile(const Ctx& ctx, std::string& err) {
   const std::string path = ctx.stream_path + ".expect";
   std::string text;
   bool ok = ReadWholeFile(path, text);
-  if (!ok) {
+  if (ok == false) {
     err = "cannot read " + path;
   }
   size_t pos = 0U;
@@ -206,7 +206,7 @@ bool VerifyExpectFile(const Ctx& ctx, std::string& err) {
     if ('#' == line[0]) {
       const bool want_header = (Codec::kH265 == ctx.codec);
       ok = want_header && first_line && (std::string::npos != line.find("codec=H265"));
-      if (!ok) {
+      if (ok == false) {
         err = "unexpected header line in " + path + ": '" + line + "'";
       }
       first_line = false;
@@ -220,7 +220,7 @@ bool VerifyExpectFile(const Ctx& ctx, std::string& err) {
     const int fields =
         std::sscanf(line.c_str(), "%" PRIu32 " %" PRIu32 " %" PRIu64 " %31s", &au_index, &is_idr, &au_bytes, hash_text);
     ok = (4 == fields) && (index < ctx.file_aus.size()) && (au_index == index);
-    if (!ok) {
+    if (ok == false) {
       err = "malformed or out-of-range expect line '" + line + "'";
     } else {
       const auto bytes = AnnexBBytes(ctx.file_aus[index]);
@@ -229,7 +229,7 @@ bool VerifyExpectFile(const Ctx& ctx, std::string& err) {
       char want_hash[32];
       std::snprintf(want_hash, sizeof(want_hash), "%016" PRIx64, hash);
       ok = (au_bytes == bytes.size()) && ((0U != is_idr) == want_idr) && (0 == std::strcmp(hash_text, want_hash));
-      if (!ok) {
+      if (ok == false) {
         err = "expect line " + std::to_string(index) + " mismatch: file says " + std::to_string(au_bytes) + "/" +
               (is_idr ? "idr" : "non-idr") + "/" + hash_text + ", parsed " + std::to_string(bytes.size()) + "/" +
               (want_idr ? "idr" : "non-idr") + "/" + want_hash;
@@ -252,7 +252,7 @@ void PrintServerLog(const Ctx& ctx) {
     return;
   }
   std::string log;
-  if (ReadWholeFile(ctx.server_log_path, log) && !log.empty()) {
+  if (ReadWholeFile(ctx.server_log_path, log) && log.empty() == false) {
     std::fprintf(stderr, "----- server log (%s, tail) -----\n%s\n", ctx.server_log_path.c_str(),
                  TailText(log, 4000U).c_str());
   } else {
@@ -303,7 +303,7 @@ uint32_t CountForeignDemoProcesses(pid_t exclude_pid, std::vector<std::string>& 
     }
     std::string cmdline;
     const std::string path = "/proc/" + std::to_string(pid) + "/cmdline";
-    if (!ReadWholeFile(path, cmdline) || cmdline.empty()) {
+    if (ReadWholeFile(path, cmdline) == false || cmdline.empty()) {
       continue;
     }
     const size_t nul = cmdline.find('\0');
@@ -418,7 +418,7 @@ CaseStart TryStartServer(Ctx& ctx, uint16_t port, const std::vector<std::string>
 
   const int64_t deadline = NowMs() + kServerStartTimeoutMs;
   bool decided = false;
-  while (!decided && NowMs() < deadline) {
+  while (decided == false && NowMs() < deadline) {
     int status = 0;
     if (::waitpid(ctx.server_pid, &status, WNOHANG) == ctx.server_pid) {
       ctx.server_exited = true;
@@ -447,7 +447,7 @@ CaseStart TryStartServer(Ctx& ctx, uint16_t port, const std::vector<std::string>
       }
     }
   }
-  if (!out.started && !out.exited) {
+  if (out.started == false && out.exited == false) {
     out.err = "server did not accept TCP connections on port " + std::to_string(port) + " within " +
               std::to_string(kServerStartTimeoutMs) + " ms";
   }
@@ -474,7 +474,7 @@ CaseStart StartCaseServer(Ctx& ctx, const char* codec_flag, bool retry_on_exit) 
       continue;
     }
     const uint16_t port = static_cast<uint16_t>(candidate);
-    if (!PortFree(port)) {
+    if (PortFree(port) == false) {
       out.err = "port " + std::to_string(port) + " already in use";
       continue;
     }
@@ -482,7 +482,7 @@ CaseStart StartCaseServer(Ctx& ctx, const char* codec_flag, bool retry_on_exit) 
     if (out.started) {
       return out;
     }
-    if (out.exited && (!retry_on_exit || (kPortAttempts - 1U) == attempt)) {
+    if (out.exited && (retry_on_exit == false || (kPortAttempts - 1U) == attempt)) {
       return out;
     }
     StopServer(ctx);  // Timed out without accepting: never leave it running.
@@ -492,13 +492,13 @@ CaseStart StartCaseServer(Ctx& ctx, const char* codec_flag, bool retry_on_exit) 
 
 void StopServer(Ctx& ctx) {
   if (ctx.server_pid > 0) {
-    if (!ctx.server_exited) {
+    if (ctx.server_exited == false) {
       static_cast<void>(::kill(ctx.server_pid, SIGTERM));
     }
     int status = 0;
     const int64_t deadline = NowMs() + 2000;
     bool reaped = false;
-    while (!reaped && NowMs() < deadline) {
+    while (reaped == false && NowMs() < deadline) {
       if (::waitpid(ctx.server_pid, &status, WNOHANG) == ctx.server_pid) {
         reaped = true;
       } else {
@@ -506,7 +506,7 @@ void StopServer(Ctx& ctx) {
         static_cast<void>(::nanosleep(&pause, nullptr));
       }
     }
-    if (!reaped) {
+    if (reaped == false) {
       static_cast<void>(::kill(ctx.server_pid, SIGKILL));
       static_cast<void>(::waitpid(ctx.server_pid, &status, 0));
     }
@@ -539,7 +539,7 @@ bool PrepareStream(Ctx& ctx, StreamKind kind, std::string& err) {
     // Run the generator through bash explicitly: the script uses bash arrays,
     // and a host whose /bin/sh is dash must not change the outcome.
     const std::vector<std::string> argv{"/bin/bash", RealStreamScript(), ctx.stream_path, h265 ? "h265" : "h264", "4"};
-    if (!rse2e::RunProcess(argv, 120000, tool_stdout, tool_stderr, exit_code)) {
+    if (rse2e::RunProcess(argv, 120000, tool_stdout, tool_stderr, exit_code) == false) {
       err = "failed to execute " + RealStreamScript();
       return false;
     }
@@ -559,7 +559,7 @@ bool PrepareStream(Ctx& ctx, StreamKind kind, std::string& err) {
       argv.push_back("--codec");
       argv.push_back("h265");
     }
-    if (!rse2e::RunProcess(argv, 30000, tool_stdout, tool_stderr, exit_code)) {
+    if (rse2e::RunProcess(argv, 30000, tool_stdout, tool_stderr, exit_code) == false) {
       err = "failed to execute stream tool " + std::string(RS_STREAM_TOOL);
       return false;
     }
@@ -574,8 +574,8 @@ bool PrepareStream(Ctx& ctx, StreamKind kind, std::string& err) {
   bool ok = rse2e::LoadStreamFile(ctx.stream_path, ctx.codec, stream, err);
   if (ok) {
     ctx.file_aus = std::move(stream.aus);
-    ok = !ctx.file_aus.empty();
-    if (!ok) {
+    ok = ctx.file_aus.empty() == false;
+    if (ok == false) {
       err = "generated stream has no access units";
     }
   }
@@ -583,7 +583,7 @@ bool PrepareStream(Ctx& ctx, StreamKind kind, std::string& err) {
   for (const auto& au : ctx.file_aus) {
     has_irap = has_irap || rse2e::HasIrap(au, ctx.codec);
   }
-  if (ok && !has_irap) {
+  if (ok && has_irap == false) {
     err = "generated stream has no IRAP/IDR access unit";
     ok = false;
   }
@@ -603,7 +603,7 @@ bool HaveFfmpeg() {
   std::string out;
   std::string err_text;
   int exit_code = -1;
-  if (!rse2e::RunProcess({"ffmpeg", "-hide_banner", "-version"}, 10000, out, err_text, exit_code)) {
+  if (rse2e::RunProcess({"ffmpeg", "-hide_banner", "-version"}, 10000, out, err_text, exit_code) == false) {
     return false;
   }
   return 0 == exit_code && (std::string::npos != out.find("ffmpeg version"));
@@ -613,7 +613,8 @@ std::string FfmpegVersionLine() {
   std::string out;
   std::string err_text;
   int exit_code = -1;
-  if (!rse2e::RunProcess({"ffmpeg", "-hide_banner", "-version"}, 10000, out, err_text, exit_code) || 0 != exit_code) {
+  if (rse2e::RunProcess({"ffmpeg", "-hide_banner", "-version"}, 10000, out, err_text, exit_code) == false ||
+      0 != exit_code) {
     return "unavailable";
   }
   const size_t eol = out.find('\n');
@@ -647,7 +648,7 @@ bool SendRequest(rse2e::Client& client, uint32_t& cseq, const char* method, cons
 
 bool ExpectStatus(const rse2e::Response& response, uint32_t want, const char* method, std::string& err) {
   const bool ok = response.status == want;
-  if (!ok) {
+  if (ok == false) {
     err = std::string(method) + " returned " + std::to_string(response.status) + " " + response.reason + ", expected " +
           std::to_string(want);
   }
@@ -720,7 +721,7 @@ bool OpenSession(RtspSession& session, const Ctx& ctx, bool tcp, uint16_t client
   }
   if (ok) {
     ok = rse2e::CodecFromSdp(describe.body, session.sdp_codec);
-    if (!ok) {
+    if (ok == false) {
       err = "SDP advertises neither H264 nor H265";
     }
   }
@@ -735,8 +736,8 @@ bool OpenSession(RtspSession& session, const Ctx& ctx, bool tcp, uint16_t client
   if (ok) {
     session.session_id = SessionToken(setup.Get("session"));
     session.transport = setup.Get("transport");
-    ok = !session.session_id.empty() && !session.transport.empty();
-    if (!ok) {
+    ok = session.session_id.empty() == false && session.transport.empty() == false;
+    if (ok == false) {
       err = "SETUP response missing Session or Transport header";
     }
   }
@@ -750,9 +751,9 @@ bool PlaySession(RtspSession& session, std::string& err) {
             ExpectStatus(play, 200U, "PLAY", err);
   if (ok) {
     const std::string info = play.Get("rtp-info");
-    ok = !info.empty() && ParseU32After(info, "seq=", session.rtp_info_seq) &&
+    ok = info.empty() == false && ParseU32After(info, "seq=", session.rtp_info_seq) &&
          ParseU32After(info, "rtptime=", session.rtp_info_ts);
-    if (!ok) {
+    if (ok == false) {
       err = "PLAY response has no usable RTP-Info: '" + info + "'";
     } else {
       session.have_rtp_info = true;
@@ -762,7 +763,7 @@ bool PlaySession(RtspSession& session, std::string& err) {
 }
 
 void TeardownSession(RtspSession& session) {
-  if (session.client.IsOpen() && !session.session_id.empty()) {
+  if (session.client.IsOpen() && session.session_id.empty() == false) {
     rse2e::Response response;
     std::string err;
     static_cast<void>(SendRequest(session.client, session.cseq, "TEARDOWN", session.track_uri,
@@ -779,7 +780,7 @@ bool CheckSdp(Codec codec, const std::string& sdp, std::string& err) {
          (std::string::npos != sdp.find("sprop-sps=")) && (std::string::npos != sdp.find("sprop-pps=")) &&
          (std::string::npos != sdp.find("m=video 0 RTP/AVP 96")) &&
          (std::string::npos != sdp.find("a=control:trackID=0"));
-    if (!ok) {
+    if (ok == false) {
       err = "H.265 SDP is missing H265/90000, sprop-vps/sps/pps, m=video 0 RTP/AVP 96 or a=control";
     }
   } else {
@@ -788,7 +789,7 @@ bool CheckSdp(Codec codec, const std::string& sdp, std::string& err) {
          (std::string::npos != sdp.find("profile-level-id=42")) &&
          (std::string::npos != sdp.find("m=video 0 RTP/AVP 96")) &&
          (std::string::npos != sdp.find("a=control:trackID=0"));
-    if (!ok) {
+    if (ok == false) {
       err = "SDP is missing sprop-parameter-sets/packetization-mode/profile-level-id/m=/a=control";
     }
   }
@@ -799,7 +800,7 @@ bool CheckSdp(Codec codec, const std::string& sdp, std::string& err) {
 
 bool PushRtp(const rse2e::RtpPacket& packet, MediaCollect& collect, bool& complete) {
   complete = false;
-  if (!collect.have_first) {
+  if (collect.have_first == false) {
     collect.first_seq = packet.seq;
     collect.first_ts = packet.timestamp;
     collect.have_first = true;
@@ -855,7 +856,7 @@ bool CollectTcpMedia(rse2e::Client& client, uint32_t wanted_aus, MediaCollect& c
             collect.max_frame_bytes = static_cast<uint32_t>(frame.payload.size());
           }
           rse2e::RtpPacket packet;
-          if (!rse2e::ParseRtp(frame.payload.data(), frame.payload.size(), packet)) {
+          if (rse2e::ParseRtp(frame.payload.data(), frame.payload.size(), packet) == false) {
             collect.err = "malformed RTP header inside interleaved frame";
             ok = false;
           } else if (packet.payload_type != kExpectedPayloadType) {
@@ -877,7 +878,7 @@ bool BindUdpPair(uint16_t& base_port, int& rtp_fd, int& rtcp_fd, std::string& er
   rtp_fd = -1;
   rtcp_fd = -1;
   bool ok = false;
-  for (uint32_t attempt = 0U; attempt < 200U && !ok; ++attempt) {
+  for (uint32_t attempt = 0U; attempt < 200U && ok == false; ++attempt) {
     uint32_t candidate = 40000U + ((static_cast<uint32_t>(::getpid()) * 37U + attempt * 2U) % 20000U);
     if (0U != (candidate & 1U)) {
       ++candidate;
@@ -898,14 +899,14 @@ bool BindUdpPair(uint16_t& base_port, int& rtp_fd, int& rtcp_fd, std::string& er
         rtcp_fd = -1;
       }
     }
-    if (!ok) {
+    if (ok == false) {
       if (rtp_fd >= 0) {
         ::close(rtp_fd);
         rtp_fd = -1;
       }
     }
   }
-  if (!ok) {
+  if (ok == false) {
     err = "cannot bind an even/odd UDP client port pair";
   }
   return ok;
@@ -935,7 +936,7 @@ bool CollectUdpMedia(int rtp_fd, uint32_t wanted_aus, MediaCollect& collect) {
     const int wait_ms = RemainingMs(deadline);
     std::vector<uint8_t> datagram;
     ok = (0 != wait_ms) && RecvUdp(rtp_fd, datagram, wait_ms);
-    if (!ok) {
+    if (ok == false) {
       collect.err = "timeout after " + std::to_string(collect.aus.size()) + " complete AUs and " +
                     std::to_string(collect.packets) + " RTP datagrams";
     } else if (0x24U == datagram[0]) {
@@ -949,7 +950,7 @@ bool CollectUdpMedia(int rtp_fd, uint32_t wanted_aus, MediaCollect& collect) {
         collect.max_frame_bytes = static_cast<uint32_t>(datagram.size());
       }
       rse2e::RtpPacket packet;
-      if (!rse2e::ParseRtp(datagram.data(), datagram.size(), packet)) {
+      if (rse2e::ParseRtp(datagram.data(), datagram.size(), packet) == false) {
         collect.err = "malformed UDP RTP packet";
         ok = false;
       } else if (packet.payload_type != kExpectedPayloadType) {
@@ -979,7 +980,7 @@ bool CompareMediaToFile(MediaCollect& collect, const std::vector<rse2e::AccessUn
                         Codec codec, std::string& err) {
   size_t wire_start = 0U;
   bool ok = FindFirstIrapAu(collect.aus, codec, wire_start);
-  if (!ok) {
+  if (ok == false) {
     err = "no IRAP/IDR access unit in the reassembled wire stream";
   } else {
     // PLAY starts at the next IRAP after the current file position, so align
@@ -1006,7 +1007,7 @@ bool CompareMediaToFile(MediaCollect& collect, const std::vector<rse2e::AccessUn
       const auto expected = rse2e::NormalizeForCompare(file_aus[file_start + i].nals, codec);
       const auto actual = rse2e::NormalizeForCompare(collect.aus[wire_start + i].nals, codec);
       ok = rse2e::CompareNals(expected, actual, codec, err);
-      if (!ok) {
+      if (ok == false) {
         err = "AU " + std::to_string(i) + " after the first IRAP: " + err;
       }
     }
@@ -1035,7 +1036,7 @@ bool RunTcpPlaybackWith(Ctx& ctx, const char* interleaved, uint8_t want_channel,
   }
   if (ok) {
     ok = TransportParam(session.transport, "interleaved") == interleaved;
-    if (!ok) {
+    if (ok == false) {
       err = "SETUP Transport lacks interleaved=" + std::string(interleaved) + ": " + session.transport;
     }
   }
@@ -1046,13 +1047,13 @@ bool RunTcpPlaybackWith(Ctx& ctx, const char* interleaved, uint8_t want_channel,
   collect.codec = session.sdp_codec;
   if (ok) {
     ok = CollectTcpMedia(session.client, 3U, collect, want_channel);
-    if (!ok) {
+    if (ok == false) {
       err = collect.err;
     }
   }
   if (ok) {
     ok = collect.channel_frames[want_channel] > 0U;
-    if (!ok) {
+    if (ok == false) {
       err = "no media on interleaved channel " + std::to_string(want_channel);
     }
   }
@@ -1072,7 +1073,7 @@ bool RunTcpPlaybackWith(Ctx& ctx, const char* interleaved, uint8_t want_channel,
     // small NALs (single-NAL packets) and >1200-byte NALs (FU).
     ok = collect.h265.fu_packets() > 0U && collect.h265.single_nal_packets() > 0U &&
          collect.h265.truncated_fu() == 0U && collect.h265.aggregation_packets() == 0U;
-    if (!ok) {
+    if (ok == false) {
       err = "H.265 packetization coverage: fu=" + std::to_string(collect.h265.fu_packets()) +
             " single_nal=" + std::to_string(collect.h265.single_nal_packets()) +
             " truncated_fu=" + std::to_string(collect.h265.truncated_fu()) +
@@ -1085,7 +1086,7 @@ bool RunTcpPlaybackWith(Ctx& ctx, const char* interleaved, uint8_t want_channel,
   if (ok) {
     ok = collect.have_first && collect.first_seq == static_cast<uint16_t>(session.rtp_info_seq) &&
          collect.first_ts == session.rtp_info_ts;
-    if (!ok) {
+    if (ok == false) {
       err = "first RTP packet (seq=" + std::to_string(collect.first_seq) + ", ts=" + std::to_string(collect.first_ts) +
             ") does not match RTP-Info (seq=" + std::to_string(session.rtp_info_seq) +
             ", ts=" + std::to_string(session.rtp_info_ts) + ")";
@@ -1100,7 +1101,7 @@ bool RunTcpPlaybackWith(Ctx& ctx, const char* interleaved, uint8_t want_channel,
   }
   if (ok) {
     ok = session.client.Buffered() <= 4U + kMaxRtpDatagramBytes;
-    if (!ok) {
+    if (ok == false) {
       err = "unparsed trailing bytes exceed one interleaved frame: " + std::to_string(session.client.Buffered());
     }
   }
@@ -1139,9 +1140,9 @@ bool RunUdpPlayback(Ctx& ctx, std::string& err) {
     uint32_t rtp_port = 0U;
     uint32_t rtcp_port = 0U;
     const size_t dash = server_port.find('-');
-    ok = !server_port.empty() && (std::string::npos != dash) && ParseU32Text(server_port.substr(0U, dash), rtp_port) &&
-         ParseU32Text(server_port.substr(dash + 1U), rtcp_port);
-    if (!ok) {
+    ok = server_port.empty() == false && (std::string::npos != dash) &&
+         ParseU32Text(server_port.substr(0U, dash), rtp_port) && ParseU32Text(server_port.substr(dash + 1U), rtcp_port);
+    if (ok == false) {
       err = "SETUP response lacks a usable server_port pair: " + session.transport;
     } else if (0U != (rtp_port & 1U) || rtcp_port != rtp_port + 1U) {
       ok = false;
@@ -1157,14 +1158,14 @@ bool RunUdpPlayback(Ctx& ctx, std::string& err) {
   collect.codec = session.sdp_codec;
   if (ok) {
     ok = CollectUdpMedia(rtp_fd, 3U, collect);
-    if (!ok) {
+    if (ok == false) {
       err = collect.err;
     }
   }
   if (ok && Codec::kH265 == collect.codec) {
     ok = collect.h265.fu_packets() > 0U && collect.h265.single_nal_packets() > 0U &&
          collect.h265.truncated_fu() == 0U && collect.h265.aggregation_packets() == 0U;
-    if (!ok) {
+    if (ok == false) {
       err = "H.265 packetization coverage: fu=" + std::to_string(collect.h265.fu_packets()) +
             " single_nal=" + std::to_string(collect.h265.single_nal_packets()) +
             " truncated_fu=" + std::to_string(collect.h265.truncated_fu()) +
@@ -1176,13 +1177,13 @@ bool RunUdpPlayback(Ctx& ctx, std::string& err) {
   }
   if (ok) {
     ok = collect.seq_gaps == 0U;
-    if (!ok) {
+    if (ok == false) {
       err = "UDP RTP sequence gaps: " + std::to_string(collect.seq_gaps);
     }
   }
   if (ok) {
     ok = collect.have_first && collect.first_seq == static_cast<uint16_t>(session.rtp_info_seq);
-    if (!ok) {
+    if (ok == false) {
       err = "first UDP RTP seq " + std::to_string(collect.first_seq) + " does not match RTP-Info seq " +
             std::to_string(session.rtp_info_seq);
     }
@@ -1239,7 +1240,7 @@ bool RunFfmpegDecode(const Ctx& ctx, const char* transport, std::string& err) {
   const bool ran = rse2e::RunProcess(argv, 30000, progress, ffmpeg_err, exit_code);
   const uint32_t frames = DecodedFrames(progress);
   bool ok = ran && 0 == exit_code && frames >= kFfmpegFrames;
-  if (!ok) {
+  if (ok == false) {
     err = "ffmpeg -rtsp_transport " + std::string(transport) + " exited rc=" + std::to_string(exit_code) +
           ", decoded frames=" + std::to_string(frames) + (ran ? "" : " (could not run ffmpeg)") +
           "; stderr: " + TailText(TrimText(ffmpeg_err), 1200U);
@@ -1247,7 +1248,7 @@ bool RunFfmpegDecode(const Ctx& ctx, const char* transport, std::string& err) {
     const std::string warnings = TrimText(ffmpeg_err);
     std::printf("    [ffmpeg] transport=%s decoded_frames=%" PRIu32 " rc=0 stderr_bytes=%zu\n", transport, frames,
                 warnings.size());
-    if (!warnings.empty()) {
+    if (warnings.empty() == false) {
       std::printf("    [ffmpeg] stderr: %s\n", TailText(warnings, 600U).c_str());
     }
   }
@@ -1280,22 +1281,22 @@ void RunOneTcpClient(ClientJob& job) {
   collect.codec = session.sdp_codec;
   if (job.ok) {
     job.ok = CollectTcpMedia(session.client, 1U, collect);
-    if (!job.ok) {
+    if (job.ok == false) {
       job.err = collect.err;
     }
   }
   if (job.ok) {
     size_t irap_index = 0U;
     job.ok = FindFirstIrapAu(collect.aus, collect.codec, irap_index);
-    if (!job.ok) {
+    if (job.ok == false) {
       job.err = "no IRAP/IDR AU received";
     } else {
       for (const auto& nal : collect.aus[irap_index].nals) {
         const bool header_ok =
-            (Codec::kH265 == collect.codec) ? (nal.bytes.size() >= 2U) : (!nal.bytes.empty() && 0U != nal.type);
+            (Codec::kH265 == collect.codec) ? (nal.bytes.size() >= 2U) : (nal.bytes.empty() == false && 0U != nal.type);
         job.ok = job.ok && header_ok && 0U == (nal.bytes[0] & 0x80U);
       }
-      if (!job.ok) {
+      if (job.ok == false) {
         job.err = "reassembled NAL boundary is invalid";
       }
     }
@@ -1319,7 +1320,7 @@ bool TestConcurrentClients(Ctx& ctx, std::string& err) {
   }
   bool ok = true;
   for (size_t i = 0U; i < jobs.size(); ++i) {
-    if (!jobs[i].ok && ok) {
+    if (jobs[i].ok == false && ok) {
       err = "client " + std::to_string(i) + ": " + jobs[i].err;
       ok = false;
     }
@@ -1336,7 +1337,7 @@ bool TestConnectionLimit(Ctx& ctx, std::string& err) {
     ok = sessions[i].client.Connect("127.0.0.1", ctx.port, static_cast<int>(kConnectTimeoutMs), err) &&
          SendRequest(sessions[i].client, sessions[i].cseq, "OPTIONS", "*", {}, "", options, err) &&
          ExpectStatus(options, 200U, "OPTIONS", err);
-    if (!ok) {
+    if (ok == false) {
       err = "connection " + std::to_string(i + 1U) + " failed: " + err;
     }
   }
@@ -1347,13 +1348,13 @@ bool TestConnectionLimit(Ctx& ctx, std::string& err) {
     std::string read_err;
     const bool sent = connected && overflow.Request("OPTIONS", "*", {"CSeq: 1"}, "", read_err);
     const bool got_response = sent && overflow.ReadResponse(options, 2000, read_err);
-    if (!connected) {
+    if (connected == false) {
       ok = false;
       err = "17th connection could not be created: " + err;
     } else if (got_response) {
       err = "17th connection received RTSP " + std::to_string(options.status) + " instead of being closed";
       ok = false;
-    } else if (!overflow.PeerClosed()) {
+    } else if (overflow.PeerClosed() == false) {
       err = "17th connection was not closed within 2 s: " + read_err;
       ok = false;
     } else {
@@ -1401,10 +1402,10 @@ bool TestSlowClient(Ctx& ctx, std::string& err) {
     pfd.fd = slow.client.Fd();
     pfd.events = POLLIN | POLLRDHUP | POLLHUP;
     const int64_t close_deadline = NowMs() + 2500;
-    while (!slow_closed && NowMs() < close_deadline) {
+    while (slow_closed == false && NowMs() < close_deadline) {
       const int ready = ::poll(&pfd, 1, RemainingMs(close_deadline));
       slow_closed = ready > 0 && (0 != (pfd.revents & (POLLRDHUP | POLLHUP)));
-      if (!slow_closed) {
+      if (slow_closed == false) {
         struct timespec pause{0, 20000000};
         static_cast<void>(::nanosleep(&pause, nullptr));
       }
@@ -1414,7 +1415,7 @@ bool TestSlowClient(Ctx& ctx, std::string& err) {
     ok = frames > 0U && max_gap_ms < 1500;
     if (0U == frames) {
       err = "healthy client received no media while the slow client was silent";
-    } else if (!ok) {
+    } else if (ok == false) {
       err = "healthy client stalled for " + std::to_string(max_gap_ms) + " ms while a slow client was silent";
     }
   }
@@ -1464,7 +1465,7 @@ bool TestErrorPaths(Ctx& ctx, std::string& err) {
                        {"Session: " + duplicate.session_id, "Transport: RTP/AVP/TCP;unicast;interleaved=0-1"}, "",
                        second, err) &&
            ExpectStatus(second, 200U, "duplicate SETUP", err);
-      if (!ok) {
+      if (ok == false) {
         err = "duplicate SETUP must be accepted in Ready state (design 6.3): " + err;
       }
     }
@@ -1531,7 +1532,7 @@ int main() {
     bool ok = true;
     bool was_skipped = false;
 
-    if (ok && test.needs_ffmpeg && !ffmpeg_ok) {
+    if (ok && test.needs_ffmpeg && ffmpeg_ok == false) {
       err = "SKIP: ffmpeg not available in PATH; case cannot be executed (reported as not executed)";
       ok = false;
       was_skipped = true;
@@ -1544,13 +1545,13 @@ int main() {
       // An unsupported codec exits immediately and must not be retried; a
       // normal case may retry once on another port when the bind raced with a
       // concurrent test run.
-      start = StartCaseServer(ctx, test.server_codec, !test.expect_start_failure);
+      start = StartCaseServer(ctx, test.server_codec, test.expect_start_failure == false);
       if (test.expect_start_failure) {
-        ok = start.exited && start.exit_code != 0 && !TrimText(start.stderr_text).empty();
+        ok = start.exited && start.exit_code != 0 && TrimText(start.stderr_text).empty() == false;
         if (ok) {
           std::printf("    [expect] server refused to start: exit=%d\n", start.exit_code);
           std::printf("    [expect] server stderr: %s\n", TailText(TrimText(start.stderr_text), 300U).c_str());
-        } else if (!start.exited) {
+        } else if (start.exited == false) {
           err = "server started for an unsupported codec combination (exit expected)";
         } else if (0 == start.exit_code) {
           err = "server exited with code 0 for an unsupported codec combination";
@@ -1559,7 +1560,7 @@ int main() {
         }
       } else {
         ok = start.started;
-        if (!ok) {
+        if (ok == false) {
           err = start.exited
                     ? ("server exited before accepting connections (exit=" + std::to_string(start.exit_code) + ")")
                     : (start.err.empty() ? "server did not start" : start.err);
@@ -1572,7 +1573,7 @@ int main() {
 
     StopServer(ctx);
     std::string stray_err;
-    if (!ReapStrays(stray_err)) {
+    if (ReapStrays(stray_err) == false) {
       ok = false;
       err += " process isolation failure:" + stray_err;
     }
@@ -1596,7 +1597,7 @@ int main() {
         PrintServerLog(ctx);
       }
     }
-    if (!was_skipped) {
+    if (was_skipped == false) {
       RemoveFile(ctx.server_log_path);
     }
   }
