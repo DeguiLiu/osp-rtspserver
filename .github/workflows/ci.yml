@@ -322,4 +322,8 @@ jobs:
         run: bash .ai/lint.sh
 
       - name: clang-tidy
+        env:
+          # tidy.sh defaults to <repo>/../newosp, but CI checks newosp out
+          # inside the workspace, so the path must be passed explicitly.
+          RS_NEWOSP_DIR: ${{ github.workspace }}/newosp
         run: bash .ai/tidy.sh
