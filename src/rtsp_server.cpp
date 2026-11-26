@@ -14,13 +14,12 @@
 #pragma GCC diagnostic pop
 
 #include <cerrno>
-#include <chrono>
 #include <cstring>
 
+#include <chrono>
 #include <fcntl.h>
 #include <netinet/tcp.h>
 #include <sys/ioctl.h>
-
 #include <unistd.h>
 
 #if defined(__linux__)
@@ -57,8 +56,8 @@ void ConfigureTcpSocket(osp::TcpSocket& sock) noexcept {
 #endif
 #if defined(TCP_USER_TIMEOUT)
   unsigned int user_timeout = kTcpUserTimeoutMs;
-  static_cast<void>(osp::socket_api::SetSockOpt(fd, IPPROTO_TCP, TCP_USER_TIMEOUT, &user_timeout,
-                                               sizeof(user_timeout)));
+  static_cast<void>(
+      osp::socket_api::SetSockOpt(fd, IPPROTO_TCP, TCP_USER_TIMEOUT, &user_timeout, sizeof(user_timeout)));
 #endif
   value = 1;
   static_cast<void>(osp::socket_api::SetSockOpt(fd, SOL_SOCKET, SO_KEEPALIVE, &value, sizeof(value)));
@@ -75,7 +74,6 @@ void ConfigureTcpSocket(osp::TcpSocket& sock) noexcept {
   static_cast<void>(osp::socket_api::SetSockOpt(fd, IPPROTO_TCP, TCP_KEEPCNT, &value, sizeof(value)));
 #endif
 }
-
 
 constexpr uint8_t kReadable = static_cast<uint8_t>(osp::IoEvent::kReadable);
 constexpr uint8_t kWritable = static_cast<uint8_t>(osp::IoEvent::kWritable);
@@ -117,7 +115,8 @@ uint64_t RandomSeed() noexcept {
 uint32_t HostIpv4(const osp::SocketAddress& addr) noexcept {
   const auto octets = addr.Ipv4Address();
   return static_cast<uint32_t>(octets[0]) | (static_cast<uint32_t>(octets[1]) << kSlotBits) |
-         (static_cast<uint32_t>(octets[2]) << (2U * kSlotBits)) | (static_cast<uint32_t>(octets[3]) << (3U * kSlotBits));
+         (static_cast<uint32_t>(octets[2]) << (2U * kSlotBits)) |
+         (static_cast<uint32_t>(octets[3]) << (3U * kSlotBits));
 }
 
 // Validates and copies the parameter sets into caller-owned storage. `dst`
@@ -161,7 +160,7 @@ void RtspServer::FillTcpInfo(Connection& c) noexcept {
     c.rcvbuf = static_cast<uint32_t>(value);
   }
 #if defined(TCP_INFO)
-  struct tcp_info info {};
+  struct tcp_info info{};
   len = static_cast<socklen_t>(sizeof(info));
   if (::getsockopt(fd, IPPROTO_TCP, TCP_INFO, &info, &len) == 0) {
     c.tcp_rtt_us = info.tcpi_rtt;
@@ -213,7 +212,9 @@ RtspServer::RtspServer() noexcept {
   svc_hsm_.Restart();
 }
 
-RtspServer::~RtspServer() noexcept { Stop(); }
+RtspServer::~RtspServer() noexcept {
+  Stop();
+}
 
 // ===========================================================================
 // Startup and shutdown
@@ -228,7 +229,8 @@ bool RtspServer::OpenListener() noexcept {
   const int32_t fd = static_cast<int32_t>(listener_.Fd());
   SetCloexec(fd);
   int32_t one = 1;
-  static_cast<void>(osp::socket_api::SetSockOpt(fd, SOL_SOCKET, SO_REUSEADDR, &one, static_cast<socklen_t>(sizeof(one))));
+  static_cast<void>(
+      osp::socket_api::SetSockOpt(fd, SOL_SOCKET, SO_REUSEADDR, &one, static_cast<socklen_t>(sizeof(one))));
   auto addr = osp::SocketAddress::FromIpv4("0.0.0.0", cfg_.port);
   if (!addr.has_value()) {
     return false;
@@ -259,8 +261,7 @@ osp::expected<void, ServerError> RtspServer::Start(const ServerConfig& cfg) noex
   if (running_.load(std::memory_order_acquire)) {
     return osp::expected<void, ServerError>::error(ServerError::kAlreadyRunning);
   }
-  if (cfg.advertise_ip == nullptr || cfg.port == 0U || cfg.max_clients == 0U ||
-      cfg.max_clients > kMaxConnections) {
+  if (cfg.advertise_ip == nullptr || cfg.port == 0U || cfg.max_clients == 0U || cfg.max_clients > kMaxConnections) {
     return osp::expected<void, ServerError>::error(ServerError::kInvalidConfig);
   }
   if (!svc::Hsm::TablesValid() || !sess::Hsm::TablesValid()) {
@@ -281,8 +282,7 @@ osp::expected<void, ServerError> RtspServer::Start(const ServerConfig& cfg) noex
   }
   // RAII: every failure path below releases the listener exactly once; only
   // the fully started server dismisses the guard.
-  osp::ScopeGuard start_guard{
-      osp::FixedFunction<void()>{[this]() noexcept { ReleaseStartHandles(); }}};
+  osp::ScopeGuard start_guard{osp::FixedFunction<void()>{[this]() noexcept { ReleaseStartHandles(); }}};
   if (!CopyParamSets(cfg_.params, vps_, sps_, pps_, params_)) {
     return osp::expected<void, ServerError>::error(ServerError::kInvalidConfig);
   }
@@ -327,7 +327,9 @@ osp::expected<void, ServerError> RtspServer::Start(const ServerConfig& cfg) noex
   return osp::expected<void, ServerError>::success();
 }
 
-void RtspServer::ReleaseStartHandles() noexcept { CloseListener(); }
+void RtspServer::ReleaseStartHandles() noexcept {
+  CloseListener();
+}
 
 bool RtspServer::StartThreads() noexcept {
   if (0 != pthread_create(&loop_thread_, nullptr, &RtspServer::LoopThreadEntry, this)) {
@@ -472,7 +474,9 @@ SourceCallbacks RtspServer::Callbacks() noexcept {
   return callbacks;
 }
 
-void RtspServer::WakeThunk(void* ctx) noexcept { static_cast<RtspServer*>(ctx)->Wake(); }
+void RtspServer::WakeThunk(void* ctx) noexcept {
+  static_cast<RtspServer*>(ctx)->Wake();
+}
 
 void RtspServer::DropThunk(void* ctx) noexcept {
   ++static_cast<RtspServer*>(ctx)->source_dropped_;
@@ -577,13 +581,12 @@ void RtspServer::OnListenerReadable(uint64_t now) noexcept {
     sc.advertise_ip = cfg_.advertise_ip;
     sc.rtsp_port = cfg_.port;
     sc.id_seed = cfg_.id_seed ^ (static_cast<uint64_t>(c.gen) << 32U) ^ static_cast<uint64_t>(slot);
-    sc.log_level = &log_level_;
     sc.idr = &idr_hooks_;
     c.session.Configure(ingress_, params_, sc);
     c.session.SetPeerIpv4(HostIpv4(peer));
 
-    const uintptr_t tag = static_cast<uintptr_t>(static_cast<uint32_t>(slot)) |
-                          (static_cast<uintptr_t>(c.gen) << kSlotBits);
+    const uintptr_t tag =
+        static_cast<uintptr_t>(static_cast<uint32_t>(slot)) | (static_cast<uintptr_t>(c.gen) << kSlotBits);
     const int32_t fd = static_cast<int32_t>(c.sock.Fd());
     if (!AddFd(fd, c.interest, tag).has_value()) {
       ++stats_.accept_failed;
@@ -1055,8 +1058,7 @@ void RtspServer::DrainShellCommands(uint64_t now) noexcept {
         break;
       case ShellCommandId::kFaultStall:
         if (cmd.arg0 < kMaxConnections && conn_[cmd.arg0].active) {
-          conn_[cmd.arg0].stall_until_ns =
-              (cmd.arg1 == 0U) ? 0U : (now + static_cast<uint64_t>(cmd.arg1) * kNsPerMs);
+          conn_[cmd.arg0].stall_until_ns = (cmd.arg1 == 0U) ? 0U : (now + static_cast<uint64_t>(cmd.arg1) * kNsPerMs);
           UpdateInterest(cmd.arg0);
         } else {
           ++stats_.shell_rejects;
@@ -1123,7 +1125,9 @@ void RtspServer::ResetServerStats() noexcept {
   idr_hooks_.requests.store(0U, std::memory_order_relaxed);
 }
 
-void RtspServer::PublishStats() noexcept { PublishSnapshot(); }
+void RtspServer::PublishStats() noexcept {
+  PublishSnapshot();
+}
 
 void RtspServer::PublishSnapshot() noexcept {
   ComputePercentiles();

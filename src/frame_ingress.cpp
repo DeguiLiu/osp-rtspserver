@@ -123,7 +123,9 @@ void FrameIngress::ReleaseProducerSlot() noexcept {
   static_cast<void>(ReturnSlot(slot));
 }
 
-bool FrameIngress::Pop(FrameDesc& out) noexcept { return input_.Pop(out); }
+bool FrameIngress::Pop(FrameDesc& out) noexcept {
+  return input_.Pop(out);
+}
 
 bool FrameIngress::AddRef(const FrameDesc& desc) noexcept {
   if (!Validate(desc)) {
@@ -172,12 +174,13 @@ const uint8_t* FrameIngress::Data(const FrameDesc& desc) const noexcept {
   return &pool_[desc.slot][0];
 }
 
-uint32_t FrameIngress::QueuedCount() const noexcept { return static_cast<uint32_t>(input_.Size()); }
+uint32_t FrameIngress::QueuedCount() const noexcept {
+  return static_cast<uint32_t>(input_.Size());
+}
 
 bool FrameIngress::ConsumeFaultDrop() noexcept {
   uint32_t count = fault_drop_.load(std::memory_order_acquire);
-  while (count != 0U && !fault_drop_.compare_exchange_weak(count, count - 1U, std::memory_order_acq_rel)) {
-  }
+  while (count != 0U && !fault_drop_.compare_exchange_weak(count, count - 1U, std::memory_order_acq_rel)) {}
   return count != 0U;
 }
 

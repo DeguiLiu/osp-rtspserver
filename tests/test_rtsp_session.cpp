@@ -11,19 +11,20 @@
 #include "rs/file_source.hpp"
 #include "rs/h264_packetizer.hpp"
 #include "rs/rtp_transport.hpp"
-#include "rs/rtsp_session.hpp"
 #include "rs/rtsp_server.hpp"
+#include "rs/rtsp_session.hpp"
 #include "rs/sdp.hpp"
+
+#include <cinttypes>
+#include <cstdlib>
+#include <cstring>
 
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <memory>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
-
-#include <cstdlib>
-#include <cstring>
-#include <memory>
 #include <vector>
 
 namespace {
@@ -54,9 +55,8 @@ struct Req {
 
 // AUD + SPS + PPS + IDR slice, 4-byte start codes.
 const uint8_t kIdrAu[] = {
-    0x00, 0x00, 0x00, 0x01, 0x09, 0xF0, 0x00, 0x00, 0x00, 0x01, 0x67, 0x42, 0xC0, 0x1F, 0x8C, 0x8D, 0x40,
-    0x00, 0x00, 0x00, 0x01, 0x68, 0xCE, 0x3C, 0x80, 0x00, 0x00, 0x00, 0x01, 0x65, 0x88, 0x84, 0x00, 0x21,
-    0xFF,
+    0x00, 0x00, 0x00, 0x01, 0x09, 0xF0, 0x00, 0x00, 0x00, 0x01, 0x67, 0x42, 0xC0, 0x1F, 0x8C, 0x8D, 0x40, 0x00,
+    0x00, 0x00, 0x01, 0x68, 0xCE, 0x3C, 0x80, 0x00, 0x00, 0x00, 0x01, 0x65, 0x88, 0x84, 0x00, 0x21, 0xFF,
 };
 
 struct Harness {
@@ -426,8 +426,7 @@ int TestPlayRtpInfoMatchesFirstPacket() {
 
   // The first IDR releases the PLAY response.
   FrameDesc idesc{};
-  RS_CHECK(PushAu(h, kIdrAu, sizeof(kIdrAu), static_cast<uint16_t>(kFrameIdr | kFrameHasParams), 40000000ULL,
-                  idesc));
+  RS_CHECK(PushAu(h, kIdrAu, sizeof(kIdrAu), static_cast<uint16_t>(kFrameIdr | kFrameHasParams), 40000000ULL, idesc));
   h.session.OnFrame(idesc, h.now);
   h.ingress.Release(idesc);
   RS_CHECK(!h.session.AwaitingRtpInfo());
@@ -512,8 +511,7 @@ int TestInputGapAwaitsIdr() {
 
   // The next IDR resumes media without a new PLAY.
   FrameDesc idesc2{};
-  RS_CHECK(PushAu(h, kIdrAu, sizeof(kIdrAu), static_cast<uint16_t>(kFrameIdr | kFrameHasParams), 90000000ULL,
-                  idesc2));
+  RS_CHECK(PushAu(h, kIdrAu, sizeof(kIdrAu), static_cast<uint16_t>(kFrameIdr | kFrameHasParams), 90000000ULL, idesc2));
   h.session.OnFrame(idesc2, h.now);
   h.ingress.Release(idesc2);
   RS_CHECK(h.Peek(buf, sizeof(buf)) > 0U);
@@ -553,12 +551,11 @@ int TestRtcpSenderReportAndRr() {
   h.Drain();
 
   // A receiver report on the RTCP channel is parsed and counted.
-  const uint8_t rr[] = {0x81U, 201U, 0x00U, 0x07U,  // V=2, RC=1, RR, length=7.
+  const uint8_t rr[] = {0x81U, 201U,  0x00U, 0x07U,  // V=2, RC=1, RR, length=7.
                         0x11U, 0x22U, 0x33U, 0x44U,  // Reporter SSRC.
                         0x55U, 0x66U, 0x77U, 0x88U,  // Source SSRC.
-                        0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U,
-                        0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U,
-                        0x00U, 0x00U, 0x00U, 0x00U};
+                        0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U,
+                        0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U};
   RS_CHECK(h.session.OnInterleaved(1U, osp::byte_span(reinterpret_cast<const std::byte*>(rr), sizeof(rr)), h.now));
   RS_CHECK_EQ(h.session.Counters().rtcp_rr, 1U);
   RS_CHECK_EQ(h.session.Counters().rtcp_bad, 0U);
@@ -716,9 +713,13 @@ uint32_t RtpTs(const PacketView& p) {
          (static_cast<uint32_t>(p.bytes[6]) << 8U) | p.bytes[7];
 }
 
-const uint8_t* RtpPayload(const PacketView& p) { return p.bytes.data() + 12U; }
+const uint8_t* RtpPayload(const PacketView& p) {
+  return p.bytes.data() + 12U;
+}
 
-uint32_t RtpPayloadLen(const PacketView& p) { return static_cast<uint32_t>(p.bytes.size()) - 12U; }
+uint32_t RtpPayloadLen(const PacketView& p) {
+  return static_cast<uint32_t>(p.bytes.size()) - 12U;
+}
 
 bool PayloadEquals(const PacketView& p, const uint8_t* expected, uint32_t len) {
   return RtpPayloadLen(p) == len && std::memcmp(RtpPayload(p), expected, len) == 0;
@@ -887,7 +888,7 @@ int TestH265FuAcrossPumps() {
                  expected.size());
     for (uint32_t i = 0U; i < rebuilt.size() && i < expected.size(); ++i) {
       if (rebuilt[i] != expected[i]) {
-        std::fprintf(stderr, "first diff at %u: rebuilt=%02x expected=%02x\n", i, rebuilt[i], expected[i]);
+        std::fprintf(stderr, "first diff at %" PRIu32 ": rebuilt=%02x expected=%02x\n", i, rebuilt[i], expected[i]);
         break;
       }
     }
@@ -933,8 +934,8 @@ int TestH265UdpPlay() {
   static_cast<void>(setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)));
 
   char transport[96];
-  static_cast<void>(std::snprintf(transport, sizeof(transport), "RTP/AVP;unicast;client_port=%u-%u",
-                                  static_cast<unsigned>(cport), static_cast<unsigned>(cport + 1U)));
+  static_cast<void>(std::snprintf(transport, sizeof(transport), "RTP/AVP;unicast;client_port=%" PRIu32 "-%" PRIu32 "",
+                                  static_cast<uint32_t>(cport), static_cast<uint32_t>(cport + 1U)));
   Req setup(Method::kSetup, "/live/trackID=0");
   setup.H("CSeq", "80");
   setup.H("Transport", transport);
@@ -1063,9 +1064,9 @@ bool WriteFile(const char* path, const uint8_t* data, uint32_t len) {
 // SPS/PPS are followed by a four-byte start code. The old extractor counted
 // the leading zero of that start code as part of the NAL.
 const uint8_t kH264ParamStream[] = {
-    0x00, 0x00, 0x00, 0x01, 0x09, 0xF0, 0x00, 0x00, 0x00, 0x01, 0x67, 0x42, 0xC0, 0x1F, 0x8C, 0x8D, 0x40,
-    0x50, 0x00, 0x00, 0x00, 0x01, 0x68, 0xCE, 0x3C, 0x80, 0x00, 0x00, 0x00, 0x01, 0x65, 0x88, 0x84, 0x21,
-    0xFF, 0x00, 0x00, 0x00, 0x01, 0x09, 0xF0, 0x00, 0x00, 0x00, 0x01, 0x41, 0x9A, 0x20,
+    0x00, 0x00, 0x00, 0x01, 0x09, 0xF0, 0x00, 0x00, 0x00, 0x01, 0x67, 0x42, 0xC0, 0x1F, 0x8C, 0x8D,
+    0x40, 0x50, 0x00, 0x00, 0x00, 0x01, 0x68, 0xCE, 0x3C, 0x80, 0x00, 0x00, 0x00, 0x01, 0x65, 0x88,
+    0x84, 0x21, 0xFF, 0x00, 0x00, 0x00, 0x01, 0x09, 0xF0, 0x00, 0x00, 0x00, 0x01, 0x41, 0x9A, 0x20,
 };
 
 const uint8_t kH265ParamStream[] = {
@@ -1076,9 +1077,8 @@ const uint8_t kH265ParamStream[] = {
 };
 
 const uint8_t kH265NoVpsStream[] = {
-    0x00, 0x00, 0x00, 0x01, 0x46, 0x01, 0x00, 0x00, 0x00, 0x01, 0x42, 0x01, 0x01, 0x60, 0xAA, 0xBB,
-    0x01, 0x00, 0x00, 0x00, 0x01, 0x44, 0x01, 0xC1, 0x72, 0xCC, 0x01, 0x00, 0x00, 0x00, 0x01, 0x26,
-    0x01, 0xAF, 0x01, 0x22, 0x33,
+    0x00, 0x00, 0x00, 0x01, 0x46, 0x01, 0x00, 0x00, 0x00, 0x01, 0x42, 0x01, 0x01, 0x60, 0xAA, 0xBB, 0x01, 0x00, 0x00,
+    0x00, 0x01, 0x44, 0x01, 0xC1, 0x72, 0xCC, 0x01, 0x00, 0x00, 0x00, 0x01, 0x26, 0x01, 0xAF, 0x01, 0x22, 0x33,
 };
 
 bool StartWithFreePort(RtspServer& server, ServerConfig& cfg) {
@@ -1213,7 +1213,9 @@ int TestDeferredCloseBatch() {
   return 0;
 }
 
-void CountIdr(void* ctx) noexcept { ++*static_cast<uint32_t*>(ctx); }
+void CountIdr(void* ctx) noexcept {
+  ++*static_cast<uint32_t*>(ctx);
+}
 
 int TestIdrHookRateLimit() {
   Harness h;
@@ -1246,8 +1248,7 @@ int TestIdrHookRateLimit() {
 
   // The IDR resumes media and no further request is made.
   FrameDesc idesc{};
-  RS_CHECK(PushAu(h, kIdrAu, sizeof(kIdrAu), static_cast<uint16_t>(kFrameIdr | kFrameHasParams),
-                  2000000000ULL, idesc));
+  RS_CHECK(PushAu(h, kIdrAu, sizeof(kIdrAu), static_cast<uint16_t>(kFrameIdr | kFrameHasParams), 2000000000ULL, idesc));
   h.session.OnFrame(idesc, play_ns + 1600ULL * 1000000ULL);
   h.ingress.Release(idesc);
   RS_CHECK(!h.session.AwaitingRtpInfo());
@@ -1259,27 +1260,48 @@ int TestIdrHookRateLimit() {
 }  // namespace
 
 int main() {
-  if (TestSnapshotInitial() != 0) return 1;
-  if (TestFaultSnapshot() != 0) return 1;
-  if (TestOptions() != 0) return 1;
-  if (TestDescribe() != 0) return 1;
-  if (TestSetupTcp() != 0) return 1;
-  if (TestSetupUdp() != 0) return 1;
-  if (TestSetupErrors() != 0) return 1;
-  if (TestPlayNeedsIdrThenTimesOut() != 0) return 1;
-  if (TestPlayRtpInfoMatchesFirstPacket() != 0) return 1;
-  if (TestInputGapAwaitsIdr() != 0) return 1;
-  if (TestRtcpSenderReportAndRr() != 0) return 1;
-  if (TestInvalidSequences() != 0) return 1;
-  if (TestControlBackpressure() != 0) return 1;
-  if (TestH265DescribeAndTcpPlay() != 0) return 1;
-  if (TestH265FuAcrossPumps() != 0) return 1;
-  if (TestH265UdpPlay() != 0) return 1;
-  if (TestH265BadParamSets() != 0) return 1;
-  if (TestCodecExclusivePerSession() != 0) return 1;
-  if (TestServerParamSets() != 0) return 1;
-  if (TestIdrHookRateLimit() != 0) return 1;
-  if (TestDeferredCloseBatch() != 0) return 1;
+  if (TestSnapshotInitial() != 0)
+    return 1;
+  if (TestFaultSnapshot() != 0)
+    return 1;
+  if (TestOptions() != 0)
+    return 1;
+  if (TestDescribe() != 0)
+    return 1;
+  if (TestSetupTcp() != 0)
+    return 1;
+  if (TestSetupUdp() != 0)
+    return 1;
+  if (TestSetupErrors() != 0)
+    return 1;
+  if (TestPlayNeedsIdrThenTimesOut() != 0)
+    return 1;
+  if (TestPlayRtpInfoMatchesFirstPacket() != 0)
+    return 1;
+  if (TestInputGapAwaitsIdr() != 0)
+    return 1;
+  if (TestRtcpSenderReportAndRr() != 0)
+    return 1;
+  if (TestInvalidSequences() != 0)
+    return 1;
+  if (TestControlBackpressure() != 0)
+    return 1;
+  if (TestH265DescribeAndTcpPlay() != 0)
+    return 1;
+  if (TestH265FuAcrossPumps() != 0)
+    return 1;
+  if (TestH265UdpPlay() != 0)
+    return 1;
+  if (TestH265BadParamSets() != 0)
+    return 1;
+  if (TestCodecExclusivePerSession() != 0)
+    return 1;
+  if (TestServerParamSets() != 0)
+    return 1;
+  if (TestIdrHookRateLimit() != 0)
+    return 1;
+  if (TestDeferredCloseBatch() != 0)
+    return 1;
   std::printf("test_rtsp_session: all checks passed\n");
   return 0;
 }

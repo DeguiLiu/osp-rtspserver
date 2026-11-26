@@ -1,49 +1,57 @@
 // rtspserver_demo: fixed-capacity RTSP server for one H.264/H.265 Annex B file.
 // SPDX-License-Identifier: MIT
+#include "osp/log.hpp"
+#include "osp/platform.hpp"
 #include "rs/file_source.hpp"
 #include "rs/rtsp_server.hpp"
 
-#include "osp/platform.hpp"
-
-#include <chrono>
+#include <cinttypes>
 #include <csignal>
 #include <cstdio>
-#include <charconv>
 #include <cstdlib>
 #include <cstring>
+
+#include <charconv>
+#include <chrono>
 #include <memory>
+#include <signal.h>
 #include <string_view>
 #include <thread>
 
-#include <signal.h>
-
 #if defined(RS_ENABLE_DEBUG_SHELL)
-#include "rs/debug_shell.hpp"
 #include "osp/shell.hpp"
+#include "rs/debug_shell.hpp"
 #endif
 
 namespace {
 
 volatile std::sig_atomic_t g_stop = 0;
 
-void OnSignal(int /*sig*/) { g_stop = 1; }
+void OnSignal(int /*sig*/) {
+  g_stop = 1;
+}
 
 void PrintUsage(const char* prog) {
+  // Not a log line: this is multi-line CLI help text. A per-line log prefix
+  // would break its alignment, and the exit code (0 for --help, 2 for a bad
+  // argument) is the contract a caller scripts against.
   std::fprintf(stderr,
                "usage: %s --port <n> --file <path.h264|path.h265> --ip <advertise_ip> [--clients <n>]\n"
                "                [--codec auto|h264|h265]\n"
-               "  --port     RTSP listen port (default %u)\n"
+               "  --port     RTSP listen port (default %" PRIu32
+               ")\n"
                "  --file     Annex B H.264/H.265 stream, AUD-delimited (required)\n"
                "  --ip       address advertised in SDP/Content-Base (required)\n"
-               "  --clients  max concurrent RTSP connections, 1..%u (default %u)\n"
+               "  --clients  max concurrent RTSP connections, 1..%" PRIu32 " (default %" PRIu32
+               ")\n"
                "  --codec    auto detects from the file header (default auto)\n"
 #if defined(RS_ENABLE_DEBUG_SHELL)
                "  --shell-port  telnet debug shell port (0 = disabled)\n"
                "  --shell-bind  shell bind address (default 127.0.0.1)\n"
 #endif
                ,
-               prog, static_cast<unsigned>(rs::kDefaultRtspPort), static_cast<unsigned>(rs::kMaxConnections),
-               static_cast<unsigned>(rs::kMaxConnections));
+               prog, static_cast<uint32_t>(rs::kDefaultRtspPort), static_cast<uint32_t>(rs::kMaxConnections),
+               static_cast<uint32_t>(rs::kMaxConnections));
 }
 
 bool ParseU32(const char* text, uint32_t& out) {
@@ -61,25 +69,31 @@ bool ParseU32(const char* text, uint32_t& out) {
 }
 
 void PrintStats(const char* tag, const rs::ServerStats& s) {
+  // Not a log line: scripts/stress.sh greps "^\[final\]" out of this, so the
+  // format is a machine-readable contract. A log prefix would break it.
   std::printf(
-      "[%s] conns=%u/%u playing=%u accepts=%llu full=%llu reqs=%llu au_in=%llu au_ok=%llu au_drop=%llu "
-      "idr_wait=%llu idr_to=%llu gaps=%llu qdrop=%llu tx_bytes=%llu short=%llu eagain=%llu "
-      "loop_us=%u/%u/%u\n",
-      tag, static_cast<unsigned>(s.connections_active), static_cast<unsigned>(s.connections_peak),
-      static_cast<unsigned>(s.sessions_playing), static_cast<unsigned long long>(s.accepts),
-      static_cast<unsigned long long>(s.accept_full), static_cast<unsigned long long>(s.requests),
-      static_cast<unsigned long long>(s.au_in), static_cast<unsigned long long>(s.au_accepted),
-      static_cast<unsigned long long>(s.au_dropped), static_cast<unsigned long long>(s.idr_waits),
-      static_cast<unsigned long long>(s.idr_timeouts), static_cast<unsigned long long>(s.input_gaps),
-      static_cast<unsigned long long>(s.queue_drops),
-      static_cast<unsigned long long>(s.tx_bytes), static_cast<unsigned long long>(s.short_writes),
-      static_cast<unsigned long long>(s.would_block), static_cast<unsigned>(s.loop_p50_us),
-      static_cast<unsigned>(s.loop_p95_us), static_cast<unsigned>(s.loop_p99_us));
+      "[%s] conns=%" PRIu32 "/%" PRIu32 " playing=%" PRIu32 " accepts=%" PRIu64 " full=%" PRIu64 " reqs=%" PRIu64
+      " au_in=%" PRIu64 " au_ok=%" PRIu64 " au_drop=%" PRIu64
+      " "
+      "idr_wait=%" PRIu64 " idr_to=%" PRIu64 " gaps=%" PRIu64 " qdrop=%" PRIu64 " tx_bytes=%" PRIu64 " short=%" PRIu64
+      " eagain=%" PRIu64
+      " "
+      "loop_us=%" PRIu32 "/%" PRIu32 "/%" PRIu32 "\n",
+      tag, static_cast<uint32_t>(s.connections_active), static_cast<uint32_t>(s.connections_peak),
+      static_cast<uint32_t>(s.sessions_playing), static_cast<uint64_t>(s.accepts), static_cast<uint64_t>(s.accept_full),
+      static_cast<uint64_t>(s.requests), static_cast<uint64_t>(s.au_in), static_cast<uint64_t>(s.au_accepted),
+      static_cast<uint64_t>(s.au_dropped), static_cast<uint64_t>(s.idr_waits), static_cast<uint64_t>(s.idr_timeouts),
+      static_cast<uint64_t>(s.input_gaps), static_cast<uint64_t>(s.queue_drops), static_cast<uint64_t>(s.tx_bytes),
+      static_cast<uint64_t>(s.short_writes), static_cast<uint64_t>(s.would_block), static_cast<uint32_t>(s.loop_p50_us),
+      static_cast<uint32_t>(s.loop_p95_us), static_cast<uint32_t>(s.loop_p99_us));
 }
 
 }  // namespace
 
 int main(int argc, char** argv) {
+  // The newosp logging backend needs an explicit Init before the first write.
+  // The server's own level is mirrored into it by SetLogLevel().
+  osp::log::Init();
   rs::ServerConfig cfg;
   bool have_file = false;
   bool have_ip = false;
@@ -111,7 +125,7 @@ int main(int argc, char** argv) {
     } else if (arg == "--clients" && has_value) {
       uint32_t clients = 0U;
       if (!ParseU32(argv[++i], clients) || clients > rs::kMaxConnections) {
-        std::fprintf(stderr, "--clients must be 1..%u\n", static_cast<unsigned>(rs::kMaxConnections));
+        OSP_LOG_ERROR("main", "--clients must be 1..%" PRIu32, static_cast<uint32_t>(rs::kMaxConnections));
         return 2;
       }
       cfg.max_clients = clients;
@@ -148,7 +162,7 @@ int main(int argc, char** argv) {
     return 2;
   }
 
-  struct sigaction sa {};
+  struct sigaction sa{};
   sa.sa_handler = &OnSignal;
   static_cast<void>(sigemptyset(&sa.sa_mask));
   sa.sa_flags = 0;
@@ -160,8 +174,8 @@ int main(int argc, char** argv) {
   rs::FileSource source;
   auto opened = source.Open(file_path, cfg.codec);
   if (!opened.has_value()) {
-    std::fprintf(stderr, "rtspserver_demo: cannot open stream %s (error %u)\n", file_path,
-                 static_cast<unsigned>(opened.get_error()));
+    OSP_LOG_ERROR("main", "cannot open stream %s (error %" PRIu32 ")", file_path,
+                  static_cast<uint32_t>(opened.get_error()));
     return 1;
   }
   cfg.params = opened.value().params;
@@ -169,22 +183,22 @@ int main(int argc, char** argv) {
   rs::RtspServer server;
   auto started = server.Start(cfg);
   if (!started.has_value()) {
-    std::fprintf(stderr, "rtspserver_demo: start failed (error %u), check --file and --ip\n",
-                 static_cast<unsigned>(started.get_error()));
+    OSP_LOG_ERROR("main", "start failed (error %" PRIu32 "), check --file and --ip",
+                  static_cast<uint32_t>(started.get_error()));
     return 1;
   }
   const rs::ServerStats stats = server.Stats();
-  std::printf(
-      "rtspserver_demo: listening on :%u, file=%s, advertise=%s, clients=%u, codec=%s vps=%u sps=%u pps=%u\n",
-      cfg.port, file_path, cfg.advertise_ip, static_cast<unsigned>(cfg.max_clients),
-      rs::CodecName(stats.codec), static_cast<unsigned>(stats.vps_len), static_cast<unsigned>(stats.sps_len),
-      static_cast<unsigned>(stats.pps_len));
-  std::fflush(stdout);
+  OSP_LOG_INFO("main",
+               "listening on :%" PRIu32 ", file=%s, advertise=%s, clients=%" PRIu32 ", codec=%s vps=%" PRIu32
+               " sps=%" PRIu32 " pps=%" PRIu32,
+               cfg.port, file_path, cfg.advertise_ip, static_cast<uint32_t>(cfg.max_clients),
+               rs::CodecName(stats.codec), static_cast<uint32_t>(stats.vps_len), static_cast<uint32_t>(stats.sps_len),
+               static_cast<uint32_t>(stats.pps_len));
 
   auto source_started = source.Start(server.Ingress(), server.Callbacks());
   if (!source_started.has_value()) {
-    std::fprintf(stderr, "rtspserver_demo: source thread start failed (error %u)\n",
-                 static_cast<unsigned>(source_started.get_error()));
+    OSP_LOG_ERROR("main", "source thread start failed (error %" PRIu32 ")",
+                  static_cast<uint32_t>(source_started.get_error()));
     server.Stop();
     return 1;
   }
@@ -202,12 +216,11 @@ int main(int argc, char** argv) {
     shell = std::make_unique<osp::DebugShell>(shell_cfg);
     auto shell_started = shell->Start();
     if (!shell_started.has_value()) {
-      std::fprintf(stderr, "rtspserver_demo: debug shell start failed on %s:%u (error %u)\n", shell_bind,
-                   static_cast<unsigned>(shell_port), static_cast<unsigned>(shell_started.get_error()));
+      OSP_LOG_ERROR("main", "debug shell start failed on %s:%" PRIu32 " (error %" PRIu32 ")", shell_bind,
+                    static_cast<uint32_t>(shell_port), static_cast<uint32_t>(shell_started.get_error()));
       shell.reset();
     } else {
-      std::printf("rtspserver_demo: debug shell on %s:%u\n", shell_bind, static_cast<unsigned>(shell_port));
-      std::fflush(stdout);
+      OSP_LOG_INFO("main", "debug shell on %s:%" PRIu32, shell_bind, static_cast<uint32_t>(shell_port));
     }
   }
 #endif
@@ -237,6 +250,8 @@ int main(int argc, char** argv) {
   source.Stop();
   server.Stop();
   PrintStats("final", server.Stats());
-  std::printf("rtspserver_demo: stopped\n");
+  // LogWrite instead of OSP_LOG_INFO: the macro needs the GNU
+  // ", ##__VA_ARGS__" extension, and -Wpedantic rejects an empty variadic part.
+  osp::log::LogWrite(osp::log::Level::kInfo, "main", __FILE__, __LINE__, "stopped");
   return 0;
 }

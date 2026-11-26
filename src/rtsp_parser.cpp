@@ -4,9 +4,9 @@
 // SPDX-License-Identifier: MIT
 #include "rs/rtsp_parser.hpp"
 
-#include <charconv>
-
 #include <cstring>
+
+#include <charconv>
 
 namespace rs {
 namespace {
@@ -204,7 +204,9 @@ bool ParseHeaderLine(const uint8_t* p, uint32_t start, uint32_t eol, HeaderView&
 
 RtspParser::RtspParser() noexcept = default;
 
-void RtspParser::Reset() noexcept { len_ = 0U; }
+void RtspParser::Reset() noexcept {
+  len_ = 0U;
+}
 
 osp::expected<void, ParseError> RtspParser::Feed(const uint8_t* data, uint32_t len,
                                                  const ParserCallbacks& cb) noexcept {
@@ -237,8 +239,8 @@ osp::expected<void, ParseError> RtspParser::Drain(const ParserCallbacks& cb) noe
       if ((len_ - pos) < 4U) {
         break;  // Header not fully received; keep it for the next Feed().
       }
-      const uint32_t payload_len = (static_cast<uint32_t>(buf_[pos + 2U]) << 8U) |
-                                   static_cast<uint32_t>(buf_[pos + 3U]);
+      const uint32_t payload_len =
+          (static_cast<uint32_t>(buf_[pos + 2U]) << 8U) | static_cast<uint32_t>(buf_[pos + 3U]);
       if (0U == payload_len || payload_len > kMaxInterleavedPayload) {
         ok = false;
         err = ParseError::kBadInterleaved;
@@ -365,8 +367,7 @@ bool GetHeaderU32(const RtspRequest& req, const char* name, uint32_t& out) noexc
 
 bool CopyHeader(const RtspRequest& req, const char* name, char* dst, uint32_t cap, uint32_t& out_len) noexcept {
   osp::byte_span value;
-  bool ok = (nullptr != dst) && (0U != cap) && GetHeader(req, name, value) &&
-            (value.size() < static_cast<size_t>(cap));
+  bool ok = (nullptr != dst) && (0U != cap) && GetHeader(req, name, value) && (value.size() < static_cast<size_t>(cap));
   if (ok) {
     out_len = static_cast<uint32_t>(value.size());
     if (out_len > 0U) {

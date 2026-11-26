@@ -99,7 +99,9 @@ void MediaSender::ReleaseFrames() noexcept {
   queue_head_ = 0U;
 }
 
-void MediaSender::ResetCursorState() noexcept { std::visit(ResetCursorVisitor{}, cursor_); }
+void MediaSender::ResetCursorState() noexcept {
+  std::visit(ResetCursorVisitor{}, cursor_);
+}
 
 void MediaSender::Reset() noexcept {
   ReleaseFrames();
@@ -204,9 +206,13 @@ void MediaSender::SetSlowBps(uint32_t bps, uint64_t now_ns) noexcept {
   client_bucket_.Configure(rate, kClientEgressBurstBytes, now_ns);
 }
 
-uint16_t MediaSender::CursorSeq() const noexcept { return std::visit(CursorSeqVisitor{}, cursor_); }
+uint16_t MediaSender::CursorSeq() const noexcept {
+  return std::visit(CursorSeqVisitor{}, cursor_);
+}
 
-uint32_t MediaSender::CursorTs() const noexcept { return std::visit(CursorTsVisitor{}, cursor_); }
+uint32_t MediaSender::CursorTs() const noexcept {
+  return std::visit(CursorTsVisitor{}, cursor_);
+}
 
 void MediaSender::StartCursor(uint32_t au_len, uint32_t ts, bool inject_params, uint16_t next_seq) noexcept {
   std::visit(StartCursorVisitor{next_seq, ts, au_len, inject_params}, cursor_);

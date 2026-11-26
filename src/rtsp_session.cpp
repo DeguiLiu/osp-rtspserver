@@ -9,12 +9,11 @@
 // SPDX-License-Identifier: MIT
 #include "rs/rtsp_session.hpp"
 
+#include "osp/log.hpp"
 #include "rs/rtcp.hpp"
-
-#include <cstdio>
-
 #include "rs/sdp.hpp"
 
+#include <cinttypes>
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
@@ -35,9 +34,13 @@ constexpr const char* kAllowMethods = "OPTIONS, DESCRIBE, SETUP, PLAY, TEARDOWN,
 constexpr const char* kTrackPath = "/live/trackID=0";
 constexpr const char* kAggregatePath = "/live";
 
-bool IsSpace(char c) noexcept { return c == ' ' || c == '\t'; }
+bool IsSpace(char c) noexcept {
+  return c == ' ' || c == '\t';
+}
 
-const uint8_t* Bytes(osp::byte_span s) noexcept { return reinterpret_cast<const uint8_t*>(s.data()); }
+const uint8_t* Bytes(osp::byte_span s) noexcept {
+  return reinterpret_cast<const uint8_t*>(s.data());
+}
 
 char ToLower(char c) noexcept {
   return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
@@ -253,7 +256,9 @@ bool ParsePortPair(const char* p, uint32_t n, uint32_t& a, uint32_t& b, bool pai
   return true;
 }
 
-constexpr uint16_t StatusCode(RtspStatus status) noexcept { return static_cast<uint16_t>(status); }
+constexpr uint16_t StatusCode(RtspStatus status) noexcept {
+  return static_cast<uint16_t>(status);
+}
 
 uint64_t SplitMix64(uint64_t x) noexcept {
   x += 0x9E3779B97F4A7C15ULL;
@@ -269,7 +274,6 @@ void Hex16(char* dst, uint64_t v) noexcept {
     dst[15U - i] = kDigits[(v >> (i * 4U)) & 0x0FU];
   }
 }
-
 
 }  // namespace
 
@@ -353,7 +357,9 @@ const char* CloseReasonName(CloseReason reason) noexcept {
 
 RtspSession::RtspSession() noexcept = default;
 
-RtspSession::~RtspSession() noexcept { udp_.Close(); }
+RtspSession::~RtspSession() noexcept {
+  udp_.Close();
+}
 
 void RtspSession::Configure(FrameIngress& ingress, const TrackParams& params, const SessionConfig& cfg) noexcept {
   udp_.Close();
@@ -411,7 +417,9 @@ void RtspSession::Close(CloseReason reason, uint64_t now_ns) noexcept {
   last_activity_ns_ = now_ns;
 }
 
-void RtspSession::OnPeerClosed(uint64_t now_ns) noexcept { Close(kClosePeerClosed, now_ns); }
+void RtspSession::OnPeerClosed(uint64_t now_ns) noexcept {
+  Close(kClosePeerClosed, now_ns);
+}
 
 bool RtspSession::ReadRtcp(uint64_t now_ns) noexcept {
   if (closed_ || transport_ != TransportKind::kUdp) {
@@ -431,8 +439,8 @@ bool RtspSession::ReadRtcp(uint64_t now_ns) noexcept {
       return true;
     }
     last_activity_ns_ = now_ns;
-    if (rtcp_.OnDatagram(osp::byte_span(reinterpret_cast<const std::byte*>(buf), got.value()),
-                         counters_.rtcp_rr, counters_.rtcp_bye, counters_.rtcp_bad)) {
+    if (rtcp_.OnDatagram(osp::byte_span(reinterpret_cast<const std::byte*>(buf), got.value()), counters_.rtcp_rr,
+                         counters_.rtcp_bye, counters_.rtcp_bad)) {
       Close(kCloseTeardown, now_ns);
       return false;
     }
@@ -594,9 +602,13 @@ uint16_t RtspSession::WriteStatus(uint16_t status, uint32_t cseq) noexcept {
   return CloseResponse(out, status);
 }
 
-osp::byte_span RtspSession::PendingTx() const noexcept { return tx_.Pending(); }
+osp::byte_span RtspSession::PendingTx() const noexcept {
+  return tx_.Pending();
+}
 
-bool RtspSession::WantsWritable() const noexcept { return tx_.WantsWritable(); }
+bool RtspSession::WantsWritable() const noexcept {
+  return tx_.WantsWritable();
+}
 
 void RtspSession::ConsumeTx(uint32_t bytes, uint64_t now_ns) noexcept {
   tx_.Consume(bytes, now_ns);
@@ -927,7 +939,7 @@ uint16_t RtspSession::HandlePlay(const RtspRequest& req, uint32_t cseq, uint64_t
     return WriteStatus(StatusCode(RtspStatus::kInvalidState), cseq);
   }
   osp::byte_span range;
-  if (FindHeader(req, "Range", range) && !ContainsLitCI(range, "npt=0") ) {
+  if (FindHeader(req, "Range", range) && !ContainsLitCI(range, "npt=0")) {
     return WriteStatus(StatusCode(RtspStatus::kInvalidRange), cseq);
   }
   if (transport_ == TransportKind::kNone) {
@@ -1118,9 +1130,13 @@ bool RtspSession::WritePlayResponse(uint64_t now) noexcept {
 // Single media pump for both transports: packet production is shared, only
 // the egress call differs. Keeping one loop guarantees the H.264 and H.265
 // paths, and TCP and UDP, observe identical ordering and drop semantics.
-uint16_t RtspSession::CursorSeq() const noexcept { return media_.CursorSeq(); }
+uint16_t RtspSession::CursorSeq() const noexcept {
+  return media_.CursorSeq();
+}
 
-uint32_t RtspSession::CursorTs() const noexcept { return media_.CursorTs(); }
+uint32_t RtspSession::CursorTs() const noexcept {
+  return media_.CursorTs();
+}
 
 bool RtspSession::PumpMedia(uint64_t now) noexcept {
   if (params_ == nullptr) {
@@ -1196,14 +1212,17 @@ bool RtspSession::PumpMedia(uint64_t now) noexcept {
     ++counters_.packets_sent;
     rtcp_.OnRtpSent(view.payload_len, now);
     sent_bytes += wire_bytes;
-    if (trace_enabled_ && cfg_.log_level != nullptr &&
-        cfg_.log_level->load(std::memory_order_relaxed) >= static_cast<uint8_t>(LogLevel::kDebug) &&
-        (trace_last_ns_ == 0U || (now - trace_last_ns_) >= 100000000ULL)) {
-      std::fprintf(stderr, "[trace] sess=%.8s seq=%u ts=%u len=%u marker=%d transport=%s\n", session_id_,
-                   static_cast<unsigned>(CursorSeq()), static_cast<unsigned>(CursorTs()),
-                   static_cast<unsigned>(view.header_len + view.prefix_len + view.payload_len),
-                   view.marker ? 1 : 0,
-                   (transport_ == TransportKind::kTcp) ? "tcp" : "udp");
+    // Packet trace: opt-in per session ("trace <slot> on") and rate-limited to
+    // 10 lines/s, so the loop thread never becomes a logging hot path.
+    // LogWrite is called directly instead of through OSP_LOG_DEBUG because the
+    // macro is compiled out in release builds (OSP_LOG_MIN_LEVEL=1 under
+    // NDEBUG), and the trace must stay available in a release image.
+    if (trace_enabled_ && (trace_last_ns_ == 0U || (now - trace_last_ns_) >= 100000000ULL)) {
+      osp::log::LogWrite(osp::log::Level::kDebug, "rtsp", __FILE__, __LINE__,
+                         "trace sess=%.8s seq=%" PRIu32 " ts=%" PRIu32 " len=%" PRIu32 " marker=%d transport=%s",
+                         session_id_, static_cast<uint32_t>(CursorSeq()), static_cast<uint32_t>(CursorTs()),
+                         static_cast<uint32_t>(view.header_len + view.prefix_len + view.payload_len),
+                         view.marker ? 1 : 0, (transport_ == TransportKind::kTcp) ? "tcp" : "udp");
       trace_last_ns_ = now;
     }
     last_activity_ns_ = now;  // Successful media output counts as activity.
@@ -1226,8 +1245,8 @@ bool RtspSession::OnTick(uint64_t now_ns) noexcept {
     RequestIdr(now_ns);
   }
   if (hsm_.IsInState(sess::kPlaying)) {
-    rtcp_.MaybeSend(now_ns, ssrc_, cfg_.advertise_ip, CursorTs(), counters_.packets_sent, transport_,
-                    rtcp_channel_, tx_, udp_, counters_.rtcp_sr, counters_.rtcp_bad);
+    rtcp_.MaybeSend(now_ns, ssrc_, cfg_.advertise_ip, CursorTs(), counters_.packets_sent, transport_, rtcp_channel_,
+                    tx_, udp_, counters_.rtcp_sr, counters_.rtcp_bad);
   }
   if (awaiting_rtp_info_ && now_ns > idr_deadline_ns_) {
     // Design §9.3: a PLAY waiting for its first IDR must not hang; close.

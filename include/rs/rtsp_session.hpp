@@ -12,8 +12,10 @@
 #ifndef RS_RTSP_SESSION_HPP_
 #define RS_RTSP_SESSION_HPP_
 
-#include "rs/config.hpp"
+#include "osp/span.hpp"
+#include "osp/vocabulary.hpp"
 #include "rs/codec.hpp"
+#include "rs/config.hpp"
 #include "rs/frame_ingress.hpp"
 #include "rs/h264_packetizer.hpp"
 #include "rs/h265_packetizer.hpp"
@@ -21,14 +23,12 @@
 #include "rs/rtcp_endpoint.hpp"
 #include "rs/rtp_transport.hpp"
 #include "rs/rtsp_parser.hpp"
-#include "rs/tx_stream.hpp"
 #include "rs/session_hsm.hpp"
+#include "rs/tx_stream.hpp"
 
-#include "osp/span.hpp"
-#include "osp/vocabulary.hpp"
+#include <cstdint>
 
 #include <atomic>
-#include <cstdint>
 #include <variant>
 
 namespace rs {
@@ -109,9 +109,8 @@ struct IdrHooks {
 struct SessionConfig {
   const char* advertise_ip = "0.0.0.0";  // SDP c= / Content-Base address.
   uint16_t rtsp_port = kDefaultRtspPort;
-  uint64_t id_seed = 0U;                 // Secure seed from the server.
-  const std::atomic<uint8_t>* log_level = nullptr;  // Server log level (debug trace).
-  IdrHooks* idr = nullptr;               // Shared encoder hook; server owned.
+  uint64_t id_seed = 0U;    // Secure seed from the server.
+  IdrHooks* idr = nullptr;  // Shared encoder hook; server owned.
 };
 
 struct SessionCounters {

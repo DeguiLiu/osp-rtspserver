@@ -5,14 +5,14 @@
 #ifndef RS_H265_PACKETIZER_HPP_
 #define RS_H265_PACKETIZER_HPP_
 
+#include "osp/span.hpp"
+#include "osp/vocabulary.hpp"
 #include "rs/config.hpp"
 #include "rs/h264_packetizer.hpp"  // shared RtpPacket / PacketizeError / NalUnit
 
-#include "osp/span.hpp"
-#include "osp/vocabulary.hpp"
+#include <cstdint>
 
 #include <array>
-#include <cstdint>
 
 namespace rs {
 
@@ -89,8 +89,7 @@ class H265Packetizer {
   static void StartAu(HevcCursor& cursor, uint32_t au_len, uint32_t ts, bool inject_params) noexcept;
 
   [[nodiscard]] static osp::expected<RtpPacket, PacketizeError> Next(const uint8_t* au, uint32_t au_len,
-                                                                     const HevcParamSets& params,
-                                                                     HevcCursor& cursor,
+                                                                     const HevcParamSets& params, HevcCursor& cursor,
                                                                      uint32_t ssrc) noexcept;
 };
 

@@ -24,8 +24,9 @@ struct RrReport {
 
 // 28 bytes: header + sender info (no report blocks).
 [[nodiscard]] osp::expected<uint32_t, RtcpError> BuildSenderReport(osp::writable_byte_span out, uint32_t ssrc,
-                                                                 uint64_t ntp_now_ns, uint32_t rtp_ts,
-                                                                 uint32_t packet_count, uint32_t octet_count) noexcept;
+                                                                   uint64_t ntp_now_ns, uint32_t rtp_ts,
+                                                                   uint32_t packet_count,
+                                                                   uint32_t octet_count) noexcept;
 
 // Summary of one received compound RTCP packet.
 struct RtcpSummary {
@@ -44,11 +45,10 @@ struct RtcpSummary {
 [[nodiscard]] osp::expected<RtcpSummary, RtcpError> ParseCompound(const uint8_t* data, uint32_t len) noexcept;
 
 // SR + SDES(CNAME) compound, the periodic sender report required for unicast.
-[[nodiscard]] osp::expected<uint32_t, RtcpError> BuildSenderReportWithSdes(osp::writable_byte_span out,
-                                                                          uint32_t ssrc, const char* cname,
-                                                                          uint64_t ntp_now_ns, uint32_t rtp_ts,
-                                                                          uint32_t packet_count,
-                                                                          uint32_t octet_count) noexcept;
+[[nodiscard]] osp::expected<uint32_t, RtcpError> BuildSenderReportWithSdes(osp::writable_byte_span out, uint32_t ssrc,
+                                                                           const char* cname, uint64_t ntp_now_ns,
+                                                                           uint32_t rtp_ts, uint32_t packet_count,
+                                                                           uint32_t octet_count) noexcept;
 
 }  // namespace rs
 

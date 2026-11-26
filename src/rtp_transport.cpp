@@ -8,12 +8,10 @@
 #include <cerrno>
 #include <cstring>
 
+#include <array>
 #include <fcntl.h>
-
 #include <sys/socket.h>
 #include <sys/uio.h>
-
-#include <array>
 #include <utility>
 
 namespace rs {
@@ -34,7 +32,7 @@ uint64_t MulSaturate(uint64_t a, uint64_t b) noexcept {
 // Sends iovecs as one datagram. Returns kSent only when the whole datagram was
 // handed to the kernel; a short UDP write is treated as fatal.
 IoResult SendIovecs(osp::SocketHandle fd, struct iovec* iov, uint32_t iov_count, uint32_t total) noexcept {
-  struct msghdr msg {};
+  struct msghdr msg{};
   msg.msg_iov = iov;
   msg.msg_iovlen = static_cast<size_t>(iov_count);
   IoResult result = IoResult::kFatal;
@@ -45,9 +43,8 @@ IoResult SendIovecs(osp::SocketHandle fd, struct iovec* iov, uint32_t iov_count,
     } else if (EINTR == errno) {
       continue;
     } else {
-      result = (EAGAIN == errno || EWOULDBLOCK == errno || ENOBUFS == errno || ENOMEM == errno)
-                   ? IoResult::kWouldBlock
-                   : IoResult::kFatal;
+      result = (EAGAIN == errno || EWOULDBLOCK == errno || ENOBUFS == errno || ENOMEM == errno) ? IoResult::kWouldBlock
+                                                                                                : IoResult::kFatal;
     }
   }
   return result;
@@ -79,8 +76,7 @@ bool OpenOne(osp::UdpSocket& sock, uint32_t dest_ipv4, uint16_t dest_port, uint1
 #if defined(IP_TOS)
     if (kUdpIpTos != 0U) {
       int32_t tos = static_cast<int32_t>(kUdpIpTos);
-      static_cast<void>(osp::socket_api::SetSockOpt(fd, IPPROTO_IP, IP_TOS, &tos,
-                                                    static_cast<socklen_t>(sizeof(tos))));
+      static_cast<void>(osp::socket_api::SetSockOpt(fd, IPPROTO_IP, IP_TOS, &tos, static_cast<socklen_t>(sizeof(tos))));
     }
 #endif
     const std::array<uint8_t, 4> any_ip{0U, 0U, 0U, 0U};
@@ -99,16 +95,15 @@ bool OpenOne(osp::UdpSocket& sock, uint32_t dest_ipv4, uint16_t dest_port, uint1
     std::array<uint8_t, 4> dest_ip{};
     SplitIpv4(dest_ipv4, dest_ip);
     auto peer = osp::SocketAddress::FromIpv4Bytes(dest_ip, dest_port);
-    ok = static_cast<bool>(peer) &&
-         osp::socket_api::Connect(sock.Fd(), peer.value().Raw(), peer.value().Size()) >= 0;
+    ok = static_cast<bool>(peer) && osp::socket_api::Connect(sock.Fd(), peer.value().Raw(), peer.value().Size()) >= 0;
   }
   if (ok) {
     int32_t sndbuf = static_cast<int32_t>(kUdpSndBufBytes);
-    static_cast<void>(osp::socket_api::SetSockOpt(sock.Fd(), SOL_SOCKET, SO_SNDBUF, &sndbuf,
-                                                  static_cast<socklen_t>(sizeof(sndbuf))));
+    static_cast<void>(
+        osp::socket_api::SetSockOpt(sock.Fd(), SOL_SOCKET, SO_SNDBUF, &sndbuf, static_cast<socklen_t>(sizeof(sndbuf))));
     int32_t rcvbuf = static_cast<int32_t>(kUdpRcvBufBytes);
-    static_cast<void>(osp::socket_api::SetSockOpt(sock.Fd(), SOL_SOCKET, SO_RCVBUF, &rcvbuf,
-                                                  static_cast<socklen_t>(sizeof(rcvbuf))));
+    static_cast<void>(
+        osp::socket_api::SetSockOpt(sock.Fd(), SOL_SOCKET, SO_RCVBUF, &rcvbuf, static_cast<socklen_t>(sizeof(rcvbuf))));
     ok = osp::SetFdNonBlocking(sock.Fd(), true) >= 0;
   }
   if (!ok) {
@@ -142,8 +137,7 @@ bool UdpRtpTransport::Open(uint32_t dest_ipv4, uint16_t dest_rtp_port, uint16_t 
     }
     if (0U == (local_rtp_port & 1U)) {
       const uint16_t rtcp_bind = static_cast<uint16_t>(local_rtp_port + 1U);
-      ok = OpenOne(rtcp_, dest_ipv4, dest_rtcp_port, rtcp_bind, local_rtcp_port) &&
-           (local_rtcp_port == rtcp_bind);
+      ok = OpenOne(rtcp_, dest_ipv4, dest_rtcp_port, rtcp_bind, local_rtcp_port) && (local_rtcp_port == rtcp_bind);
     }
     if (!ok) {
       rtp_.Close();
@@ -249,12 +243,11 @@ osp::expected<uint32_t, TransportError> UdpRtpTransport::RecvRtcp(uint8_t* data,
 }
 
 osp::expected<uint32_t, TransportError> WriteInterleavedRaw(osp::writable_byte_span out, uint8_t channel,
-                                                           const uint8_t* data, uint32_t len) noexcept {
+                                                            const uint8_t* data, uint32_t len) noexcept {
   if (channel > kMaxInterleavedChannel || nullptr == data) {
     return osp::expected<uint32_t, TransportError>::error(TransportError::kFatal);
   }
-  if (0U == len || len > kMaxInterleavedFrameBytes ||
-      out.size() < static_cast<size_t>(kInterleavedHeaderBytes) + len) {
+  if (0U == len || len > kMaxInterleavedFrameBytes || out.size() < static_cast<size_t>(kInterleavedHeaderBytes) + len) {
     return osp::expected<uint32_t, TransportError>::error(TransportError::kTooLarge);
   }
   PutHeader(out, channel, len);

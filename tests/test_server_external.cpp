@@ -9,8 +9,9 @@
 #include "rs/rtsp_server.hpp"
 #pragma GCC diagnostic pop
 
-#include <atomic>
 #include <cstring>
+
+#include <atomic>
 #include <string>
 #include <thread>
 
@@ -42,8 +43,7 @@ bool StartPlay(rse2e::Client& client, uint16_t port) {
     return false;
   }
   const std::string session = response.Get("Session");
-  return !session.empty() &&
-         client.Request("PLAY", uri, {"CSeq: 2", "Session: " + session}, "", err);
+  return !session.empty() && client.Request("PLAY", uri, {"CSeq: 2", "Session: " + session}, "", err);
 }
 
 }  // namespace

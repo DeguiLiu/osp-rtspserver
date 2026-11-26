@@ -69,24 +69,56 @@ bool TablesAreValid(const osp::StateDef<Context>* states, uint32_t state_count,
 namespace svc {
 namespace {
 
-void OnEntry(Context& ctx, int32_t state) noexcept { ctx.trace.Push(HsmStepKind::kEntry, state); }
-void OnExit(Context& ctx, int32_t state) noexcept { ctx.trace.Push(HsmStepKind::kExit, state); }
+void OnEntry(Context& ctx, int32_t state) noexcept {
+  ctx.trace.Push(HsmStepKind::kEntry, state);
+}
+void OnExit(Context& ctx, int32_t state) noexcept {
+  ctx.trace.Push(HsmStepKind::kExit, state);
+}
 
-void EnterRoot(Context& c) noexcept { OnEntry(c, kRoot); }
-void EnterInit(Context& c) noexcept { OnEntry(c, kInit); }
-void EnterReady(Context& c) noexcept { OnEntry(c, kReady); }
-void EnterRunning(Context& c) noexcept { OnEntry(c, kRunning); }
-void EnterStopping(Context& c) noexcept { OnEntry(c, kStopping); }
-void EnterStopped(Context& c) noexcept { OnEntry(c, kStopped); }
-void EnterFailed(Context& c) noexcept { OnEntry(c, kFailed); }
+void EnterRoot(Context& c) noexcept {
+  OnEntry(c, kRoot);
+}
+void EnterInit(Context& c) noexcept {
+  OnEntry(c, kInit);
+}
+void EnterReady(Context& c) noexcept {
+  OnEntry(c, kReady);
+}
+void EnterRunning(Context& c) noexcept {
+  OnEntry(c, kRunning);
+}
+void EnterStopping(Context& c) noexcept {
+  OnEntry(c, kStopping);
+}
+void EnterStopped(Context& c) noexcept {
+  OnEntry(c, kStopped);
+}
+void EnterFailed(Context& c) noexcept {
+  OnEntry(c, kFailed);
+}
 
-void LeaveRoot(Context& c) noexcept { OnExit(c, kRoot); }
-void LeaveInit(Context& c) noexcept { OnExit(c, kInit); }
-void LeaveReady(Context& c) noexcept { OnExit(c, kReady); }
-void LeaveRunning(Context& c) noexcept { OnExit(c, kRunning); }
-void LeaveStopping(Context& c) noexcept { OnExit(c, kStopping); }
-void LeaveStopped(Context& c) noexcept { OnExit(c, kStopped); }
-void LeaveFailed(Context& c) noexcept { OnExit(c, kFailed); }
+void LeaveRoot(Context& c) noexcept {
+  OnExit(c, kRoot);
+}
+void LeaveInit(Context& c) noexcept {
+  OnExit(c, kInit);
+}
+void LeaveReady(Context& c) noexcept {
+  OnExit(c, kReady);
+}
+void LeaveRunning(Context& c) noexcept {
+  OnExit(c, kRunning);
+}
+void LeaveStopping(Context& c) noexcept {
+  OnExit(c, kStopping);
+}
+void LeaveStopped(Context& c) noexcept {
+  OnExit(c, kStopped);
+}
+void LeaveFailed(Context& c) noexcept {
+  OnExit(c, kFailed);
+}
 
 bool GuardListenerReady(Context& c, const void* /*data*/) noexcept {
   return c.listener_ready;
@@ -134,9 +166,12 @@ void ActFatal(Context& c, const void* /*data*/) noexcept {
 }
 
 constexpr osp::StateDef<Context> kStates[kStateCount] = {
-    {"Root", -1, EnterRoot, LeaveRoot},        {"Init", kRoot, EnterInit, LeaveInit},
-    {"Ready", kRoot, EnterReady, LeaveReady},  {"Running", kRoot, EnterRunning, LeaveRunning},
-    {"Stopping", kRoot, EnterStopping, LeaveStopping}, {"Stopped", kRoot, EnterStopped, LeaveStopped},
+    {"Root", -1, EnterRoot, LeaveRoot},
+    {"Init", kRoot, EnterInit, LeaveInit},
+    {"Ready", kRoot, EnterReady, LeaveReady},
+    {"Running", kRoot, EnterRunning, LeaveRunning},
+    {"Stopping", kRoot, EnterStopping, LeaveStopping},
+    {"Stopped", kRoot, EnterStopped, LeaveStopped},
     {"Failed", kRoot, EnterFailed, LeaveFailed},
 };
 
@@ -193,7 +228,9 @@ bool Hsm::Dispatch(uint32_t event) noexcept {
   return true;
 }
 
-bool Hsm::TablesValid() noexcept { return TablesAreValid(kStates, kStateCount, kTransitions, kTransitionCount); }
+bool Hsm::TablesValid() noexcept {
+  return TablesAreValid(kStates, kStateCount, kTransitions, kTransitionCount);
+}
 
 }  // namespace svc
 
@@ -203,22 +240,50 @@ bool Hsm::TablesValid() noexcept { return TablesAreValid(kStates, kStateCount, k
 namespace sess {
 namespace {
 
-void OnEntry(Context& ctx, int32_t state) noexcept { ctx.trace.Push(HsmStepKind::kEntry, state); }
-void OnExit(Context& ctx, int32_t state) noexcept { ctx.trace.Push(HsmStepKind::kExit, state); }
+void OnEntry(Context& ctx, int32_t state) noexcept {
+  ctx.trace.Push(HsmStepKind::kEntry, state);
+}
+void OnExit(Context& ctx, int32_t state) noexcept {
+  ctx.trace.Push(HsmStepKind::kExit, state);
+}
 
-void EnterRoot(Context& c) noexcept { OnEntry(c, kRoot); }
-void EnterInit(Context& c) noexcept { OnEntry(c, kInit); }
-void EnterActive(Context& c) noexcept { OnEntry(c, kActive); }
-void EnterReady(Context& c) noexcept { OnEntry(c, kReady); }
-void EnterPlaying(Context& c) noexcept { OnEntry(c, kPlaying); }
-void EnterClosing(Context& c) noexcept { OnEntry(c, kClosing); }
+void EnterRoot(Context& c) noexcept {
+  OnEntry(c, kRoot);
+}
+void EnterInit(Context& c) noexcept {
+  OnEntry(c, kInit);
+}
+void EnterActive(Context& c) noexcept {
+  OnEntry(c, kActive);
+}
+void EnterReady(Context& c) noexcept {
+  OnEntry(c, kReady);
+}
+void EnterPlaying(Context& c) noexcept {
+  OnEntry(c, kPlaying);
+}
+void EnterClosing(Context& c) noexcept {
+  OnEntry(c, kClosing);
+}
 
-void LeaveRoot(Context& c) noexcept { OnExit(c, kRoot); }
-void LeaveInit(Context& c) noexcept { OnExit(c, kInit); }
-void LeaveActive(Context& c) noexcept { OnExit(c, kActive); }
-void LeaveReady(Context& c) noexcept { OnExit(c, kReady); }
-void LeavePlaying(Context& c) noexcept { OnExit(c, kPlaying); }
-void LeaveClosing(Context& c) noexcept { OnExit(c, kClosing); }
+void LeaveRoot(Context& c) noexcept {
+  OnExit(c, kRoot);
+}
+void LeaveInit(Context& c) noexcept {
+  OnExit(c, kInit);
+}
+void LeaveActive(Context& c) noexcept {
+  OnExit(c, kActive);
+}
+void LeaveReady(Context& c) noexcept {
+  OnExit(c, kReady);
+}
+void LeavePlaying(Context& c) noexcept {
+  OnExit(c, kPlaying);
+}
+void LeaveClosing(Context& c) noexcept {
+  OnExit(c, kClosing);
+}
 
 bool GuardSetupOk(Context& c, const void* /*data*/) noexcept {
   return c.setup_ok;
@@ -351,7 +416,9 @@ bool Hsm::Dispatch(uint32_t event) noexcept {
   return true;
 }
 
-bool Hsm::TablesValid() noexcept { return TablesAreValid(kStates, kStateCount, kTransitions, kTransitionCount); }
+bool Hsm::TablesValid() noexcept {
+  return TablesAreValid(kStates, kStateCount, kTransitions, kTransitionCount);
+}
 
 }  // namespace sess
 

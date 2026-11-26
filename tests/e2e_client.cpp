@@ -4,12 +4,12 @@
 #include "e2e_client.hpp"
 
 #include <cerrno>
-#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
 #include <arpa/inet.h>
+#include <chrono>
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
@@ -27,8 +27,7 @@ constexpr uint32_t kMaxBufferedBytes = 4U * 1024U * 1024U;
 constexpr size_t kMaxFrameBytes = 65535U;
 
 int64_t NowMs() noexcept {
-  return std::chrono::duration_cast<std::chrono::milliseconds>(
-             std::chrono::steady_clock::now().time_since_epoch())
+  return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
       .count();
 }
 
@@ -128,7 +127,9 @@ std::string MakeUri(const std::string& host, uint16_t port, const std::string& p
   return "rtsp://" + host + ":" + std::to_string(port) + path;
 }
 
-Client::~Client() { Close(); }
+Client::~Client() {
+  Close();
+}
 
 void Client::Close() noexcept {
   if (fd_ >= 0) {
@@ -148,7 +149,7 @@ bool Client::Connect(const std::string& host, uint16_t port, int timeout_ms, std
   interleaved_frames_ = 0U;
   stray_responses_ = 0U;
 
-  struct sockaddr_in addr {};
+  struct sockaddr_in addr{};
   addr.sin_family = AF_INET;
   addr.sin_port = htons(port);
   if (::inet_pton(AF_INET, host.c_str(), &addr.sin_addr) != 1) {
@@ -172,10 +173,9 @@ bool Client::Connect(const std::string& host, uint16_t port, int timeout_ms, std
     if (0 == ::connect(fd_, reinterpret_cast<const struct sockaddr*>(&addr), sizeof(addr))) {
       ok = true;
     } else if (EINPROGRESS != errno) {
-      last_err = (ECONNREFUSED == errno) ? "connection refused (listener closed or not bound)"
-                                         : std::strerror(errno);
+      last_err = (ECONNREFUSED == errno) ? "connection refused (listener closed or not bound)" : std::strerror(errno);
     } else {
-      struct pollfd pfd {};
+      struct pollfd pfd{};
       pfd.fd = fd_;
       pfd.events = POLLOUT;
       const int ready = ::poll(&pfd, 1, timeout_ms);
@@ -194,7 +194,7 @@ bool Client::Connect(const std::string& host, uint16_t port, int timeout_ms, std
     }
     if (!ok) {
       Close();
-      struct timespec pause {0, 50000000};
+      struct timespec pause{0, 50000000};
       static_cast<void>(::nanosleep(&pause, nullptr));
     }
   }
@@ -216,7 +216,7 @@ bool Client::SendAll(const std::string& data, int timeout_ms, std::string& err) 
     if (n > 0) {
       sent += static_cast<size_t>(n);
     } else if (n < 0 && (EAGAIN == errno || EWOULDBLOCK == errno || EINTR == errno)) {
-      struct pollfd pfd {};
+      struct pollfd pfd{};
       pfd.fd = fd_;
       pfd.events = POLLOUT;
       const int wait_ms = RemainingMs(deadline);
@@ -232,8 +232,8 @@ bool Client::SendAll(const std::string& data, int timeout_ms, std::string& err) 
   return ok;
 }
 
-bool Client::Request(const std::string& method, const std::string& uri,
-                     const std::vector<std::string>& headers, const std::string& body, std::string& err) {
+bool Client::Request(const std::string& method, const std::string& uri, const std::vector<std::string>& headers,
+                     const std::string& body, std::string& err) {
   if (fd_ < 0) {
     err = "request on closed client";
     return false;
@@ -310,9 +310,8 @@ bool Client::PumpOnce(bool& consumed, std::string& err) {
       const std::string status_line = head.substr(0U, first_eol);
       char* end = nullptr;
       const size_t space = status_line.find(' ');
-      const unsigned long status = (std::string::npos != space)
-                                       ? std::strtoul(status_line.c_str() + space + 1U, &end, 10)
-                                       : 0UL;
+      const unsigned long status =
+          (std::string::npos != space) ? std::strtoul(status_line.c_str() + space + 1U, &end, 10) : 0UL;
       if (std::string::npos == space || nullptr == end || status < 100UL || status > 999UL) {
         err = "malformed RTSP status line: " + status_line;
         ok = false;
@@ -359,7 +358,7 @@ bool Client::Fill(int timeout_ms, std::string& err) {
   bool ok = true;
   bool got_data = false;
   while (ok && !got_data) {
-    struct pollfd pfd {};
+    struct pollfd pfd{};
     pfd.fd = fd_;
     pfd.events = POLLIN;
     const int wait_ms = RemainingMs(deadline);
@@ -669,7 +668,9 @@ bool IsIrapType(Codec codec, uint8_t type) noexcept {
   return 5U == type;
 }
 
-const char* CodecLabel(Codec codec) noexcept { return (Codec::kH265 == codec) ? "H265" : "H264"; }
+const char* CodecLabel(Codec codec) noexcept {
+  return (Codec::kH265 == codec) ? "H265" : "H264";
+}
 
 bool CodecFromSdp(const std::string& sdp, Codec& out) {
   const bool h265 = (std::string::npos != sdp.find("H265/")) || (std::string::npos != sdp.find("sprop-vps="));
@@ -808,17 +809,17 @@ bool CompareNals(const std::vector<NalUnit>& expected, const std::vector<NalUnit
     } else {
       const NalUnit& got = actual[actual_index];
       if (want.type != got.type) {
-        err = "NAL #" + std::to_string(expected_index) + " type mismatch: expected " +
-              std::to_string(want.type) + ", got " + std::to_string(got.type);
+        err = "NAL #" + std::to_string(expected_index) + " type mismatch: expected " + std::to_string(want.type) +
+              ", got " + std::to_string(got.type);
         ok = false;
       } else if (want.bytes != got.bytes) {
         size_t diff = 0U;
         while (diff < want.bytes.size() && diff < got.bytes.size() && want.bytes[diff] == got.bytes[diff]) {
           ++diff;
         }
-        err = "NAL #" + std::to_string(expected_index) + " (type " + std::to_string(want.type) +
-              ") differs at byte " + std::to_string(diff) + ": expected size " +
-              std::to_string(want.bytes.size()) + ", got " + std::to_string(got.bytes.size());
+        err = "NAL #" + std::to_string(expected_index) + " (type " + std::to_string(want.type) + ") differs at byte " +
+              std::to_string(diff) + ": expected size " + std::to_string(want.bytes.size()) + ", got " +
+              std::to_string(got.bytes.size());
         ok = false;
       } else {
         ++actual_index;
@@ -828,8 +829,8 @@ bool CompareNals(const std::vector<NalUnit>& expected, const std::vector<NalUnit
   return ok;
 }
 
-bool RunProcess(const std::vector<std::string>& argv, int timeout_ms, std::string& stdout_log,
-                std::string& stderr_log, int& exit_code) {
+bool RunProcess(const std::vector<std::string>& argv, int timeout_ms, std::string& stdout_log, std::string& stderr_log,
+                int& exit_code) {
   char out_path[] = "/tmp/rs_proc_out_XXXXXX";
   char err_path[] = "/tmp/rs_proc_err_XXXXXX";
   const int out_fd = ::mkstemp(out_path);
@@ -891,7 +892,7 @@ bool RunProcess(const std::vector<std::string>& argv, int timeout_ms, std::strin
           reaped = true;
           exit_code = -1;
         } else {
-          struct timespec pause {0, 2000000};
+          struct timespec pause{0, 2000000};
           static_cast<void>(::nanosleep(&pause, nullptr));
         }
       }

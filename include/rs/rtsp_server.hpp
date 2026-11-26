@@ -8,41 +8,36 @@
 #ifndef RS_RTSP_SERVER_HPP_
 #define RS_RTSP_SERVER_HPP_
 
-#include "rs/config.hpp"
-#include "rs/codec.hpp"
-#include "rs/frame_ingress.hpp"
-#include "rs/ip_rate_limiter.hpp"
-#include "rs/rtsp_parser.hpp"
-#include "rs/rtsp_session.hpp"
-#include "rs/rtp_transport.hpp"
-
 #include "osp/event_loop.hpp"
+#include "osp/log.hpp"
 #include "osp/socket.hpp"
 #include "osp/spsc_ringbuffer.hpp"
 #include "osp/vocabulary.hpp"
+#include "rs/codec.hpp"
+#include "rs/config.hpp"
+#include "rs/frame_ingress.hpp"
+#include "rs/ip_rate_limiter.hpp"
+#include "rs/rtp_transport.hpp"
+#include "rs/rtsp_parser.hpp"
+#include "rs/rtsp_session.hpp"
 
-#include <atomic>
 #include <cstdint>
 #include <cstdio>
+
+#include <atomic>
 #include <mutex>
 #include <pthread.h>
 
 namespace rs {
 
-enum class ServerError : uint8_t {
-  kInvalidConfig = 0,
-  kAlreadyRunning,
-  kNotRunning,
-  kBackendFailed,
-  kInvalidParams
-};
+enum class ServerError : uint8_t { kInvalidConfig = 0, kAlreadyRunning, kNotRunning, kBackendFailed, kInvalidParams };
 
 struct ServerConfig {
   uint16_t port = kDefaultRtspPort;
-  TrackParams params{};               // Codec + parameter sets; copied by Start().
+  TrackParams params{};  // Codec + parameter sets; copied by Start().
   const char* advertise_ip = "127.0.0.1";
   uint32_t max_clients = kMaxConnections;
-  uint64_t id_seed = 0U;              // 0 = fill from the system RNG.
+  uint64_t id_seed = 0U;  // 0 = fill from the system RNG.
   // kUnknown = auto-detect from the file header; kH264/kH265 must match it.
   Codec codec = Codec::kUnknown;
 };
@@ -50,7 +45,7 @@ struct ServerConfig {
 // POD snapshot; the loop writes through Publish(), readers get a copy.
 struct ServerStats {
   Codec codec = Codec::kUnknown;
-  uint32_t param_gen = 0U;           // Bumped by UpdateTrackParams().
+  uint32_t param_gen = 0U;  // Bumped by UpdateTrackParams().
   uint32_t vps_len = 0U;
   uint32_t sps_len = 0U;
   uint32_t pps_len = 0U;
@@ -65,16 +60,16 @@ struct ServerStats {
   uint64_t requests = 0U;
   uint64_t au_in = 0U;
   uint64_t au_accepted = 0U;
-  uint64_t au_dropped = 0U;         // Source-side Acquire/Commit failures.
-  uint64_t frame_pool_drop = 0U;    // Descriptor failed validation at the loop.
+  uint64_t au_dropped = 0U;       // Source-side Acquire/Commit failures.
+  uint64_t frame_pool_drop = 0U;  // Descriptor failed validation at the loop.
   uint64_t input_queue_full = 0U;
   uint64_t idr_waits = 0U;
-  uint64_t idr_requests = 0U;       // Encoder hooks invoked (rate limited).
-  uint64_t input_gaps = 0U;         // Source sequence gaps -> AwaitIDR (P0-5).
-  uint64_t rtcp_sr = 0U;            // Sender reports sent.
-  uint64_t rtcp_rr = 0U;            // Receiver reports parsed.
-  uint64_t rtcp_bye = 0U;           // BYE packets parsed.
-  uint64_t rtcp_bad = 0U;           // Malformed RTCP packets.
+  uint64_t idr_requests = 0U;  // Encoder hooks invoked (rate limited).
+  uint64_t input_gaps = 0U;    // Source sequence gaps -> AwaitIDR (P0-5).
+  uint64_t rtcp_sr = 0U;       // Sender reports sent.
+  uint64_t rtcp_rr = 0U;       // Receiver reports parsed.
+  uint64_t rtcp_bye = 0U;      // BYE packets parsed.
+  uint64_t rtcp_bad = 0U;      // Malformed RTCP packets.
   uint64_t idr_timeouts = 0U;
   uint64_t queue_drops = 0U;
   uint64_t tx_bytes = 0U;
@@ -120,7 +115,7 @@ struct ServerSnapshot {
   uint32_t timers_used = 0U;
   uint16_t port = 0U;
   uint32_t max_clients = 0U;
-  uint8_t log_level = 0U;
+  uint8_t log_level = 0U;  // osp::log::Level value, for shell display only.
   uint32_t fault_drop_remaining = 0U;
   bool idr_hook_set = false;
   char advertise_ip[64] = {};
@@ -198,11 +193,14 @@ class RtspServer final : public osp::EventLoop<RtspServer, kMaxPollEvents, 8U> {
   // ingress, then call Wake(); the loop owns all sessions and sockets.
   [[nodiscard]] FrameIngress& Ingress() noexcept { return ingress_; }
   void RequestStop() noexcept;
-  void SetLogLevel(LogLevel level) noexcept {
+  // Set the log level for this server AND for the newosp logging backend, so
+  // that library-internal messages and server messages share one threshold.
+  void SetLogLevel(osp::log::Level level) noexcept {
     log_level_.store(static_cast<uint8_t>(level), std::memory_order_release);
+    osp::log::SetLevel(level);
   }
-  [[nodiscard]] LogLevel GetLogLevel() const noexcept {
-    return static_cast<LogLevel>(log_level_.load(std::memory_order_acquire));
+  [[nodiscard]] osp::log::Level GetLogLevel() const noexcept {
+    return static_cast<osp::log::Level>(log_level_.load(std::memory_order_acquire));
   }
   // Shell thread -> loop. Single producer (one shell session), fixed queue.
   [[nodiscard]] bool PostShellCommand(const ShellCommand& command) noexcept;
@@ -360,7 +358,7 @@ class RtspServer final : public osp::EventLoop<RtspServer, kMaxPollEvents, 8U> {
 
   ServerStats stats_{};
   osp::SpscRingbuffer<ShellCommand, 8U> shell_cmds_;
-  std::atomic<uint8_t> log_level_{static_cast<uint8_t>(LogLevel::kInfo)};
+  std::atomic<uint8_t> log_level_{static_cast<uint8_t>(osp::log::Level::kInfo)};
   uint32_t lat_hist_[kLatencyBuckets] = {};
   uint64_t lat_total_ = 0U;
   mutable std::mutex snapshot_mutex_;

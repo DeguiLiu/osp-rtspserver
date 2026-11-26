@@ -7,26 +7,26 @@
 // SPDX-License-Identifier: MIT
 #include "e2e_client.hpp"
 
+#include <cinttypes>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
 #include <arpa/inet.h>
+#include <chrono>
 #include <dirent.h>
 #include <fcntl.h>
+#include <functional>
 #include <netinet/in.h>
 #include <poll.h>
 #include <signal.h>
+#include <string>
 #include <sys/prctl.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
-#include <unistd.h>
-
-#include <chrono>
-#include <functional>
-#include <string>
 #include <thread>
+#include <unistd.h>
 #include <utility>
 #include <vector>
 
@@ -99,8 +99,7 @@ struct MediaCollect {
 };
 
 int64_t NowMs() noexcept {
-  return std::chrono::duration_cast<std::chrono::milliseconds>(
-             std::chrono::steady_clock::now().time_since_epoch())
+  return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
       .count();
 }
 
@@ -112,12 +111,11 @@ int RemainingMs(int64_t deadline) noexcept {
 std::string TrimText(const std::string& text) {
   size_t first = 0U;
   size_t last = text.size();
-  while (first < last && (text[first] == ' ' || text[first] == '\t' || text[first] == '\r' ||
-                          text[first] == '\n')) {
+  while (first < last && (text[first] == ' ' || text[first] == '\t' || text[first] == '\r' || text[first] == '\n')) {
     ++first;
   }
-  while (last > first && (text[last - 1U] == ' ' || text[last - 1U] == '\t' || text[last - 1U] == '\r' ||
-                          text[last - 1U] == '\n')) {
+  while (last > first &&
+         (text[last - 1U] == ' ' || text[last - 1U] == '\t' || text[last - 1U] == '\r' || text[last - 1U] == '\n')) {
     --last;
   }
   return text.substr(first, last - first);
@@ -219,7 +217,8 @@ bool VerifyExpectFile(const Ctx& ctx, std::string& err) {
     unsigned is_idr = 0U;
     unsigned long long au_bytes = 0U;
     char hash_text[32] = {};
-    const int fields = std::sscanf(line.c_str(), "%u %u %llu %31s", &au_index, &is_idr, &au_bytes, hash_text);
+    const int fields =
+        std::sscanf(line.c_str(), "%" PRIu32 " %" PRIu32 " %" PRIu64 " %31s", &au_index, &is_idr, &au_bytes, hash_text);
     ok = (4 == fields) && (index < ctx.file_aus.size()) && (au_index == index);
     if (!ok) {
       err = "malformed or out-of-range expect line '" + line + "'";
@@ -228,7 +227,7 @@ bool VerifyExpectFile(const Ctx& ctx, std::string& err) {
       const bool want_idr = rse2e::HasIrap(ctx.file_aus[index], ctx.codec);
       const uint64_t hash = Fnv1a64(bytes.data(), bytes.size());
       char want_hash[32];
-      std::snprintf(want_hash, sizeof(want_hash), "%016llx", static_cast<unsigned long long>(hash));
+      std::snprintf(want_hash, sizeof(want_hash), "%016llx", static_cast<uint64_t>(hash));
       ok = (au_bytes == bytes.size()) && ((0U != is_idr) == want_idr) && (0 == std::strcmp(hash_text, want_hash));
       if (!ok) {
         err = "expect line " + std::to_string(index) + " mismatch: file says " + std::to_string(au_bytes) + "/" +
@@ -240,8 +239,7 @@ bool VerifyExpectFile(const Ctx& ctx, std::string& err) {
     }
   }
   if (ok && index != ctx.file_aus.size()) {
-    err = "expect file has " + std::to_string(index) + " AUs, parsed stream has " +
-          std::to_string(ctx.file_aus.size());
+    err = "expect file has " + std::to_string(index) + " AUs, parsed stream has " + std::to_string(ctx.file_aus.size());
     ok = false;
   }
   return ok;
@@ -268,7 +266,7 @@ bool PortFree(uint16_t port) noexcept {
   if (fd >= 0) {
     const int one = 1;
     static_cast<void>(::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)));
-    struct sockaddr_in addr {};
+    struct sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
@@ -323,7 +321,7 @@ void ReportForeignDemoProcesses(pid_t own_pid, const char* phase) {
   const uint32_t count = CountForeignDemoProcesses(own_pid, found);
   // Informational only: the suite never signals a process it did not fork, so
   // a server from another build directory is reported and otherwise ignored.
-  std::printf("    [iso] %s: foreign rtspserver_demo processes=%u (informational)\n", phase, count);
+  std::printf("    [iso] %s: foreign rtspserver_demo processes=%" PRIu32 " (informational)\n", phase, count);
   for (const auto& item : found) {
     std::printf("    [iso]   foreign pid: %s\n", item.c_str());
   }
@@ -378,15 +376,15 @@ CaseStart TryStartServer(Ctx& ctx, uint16_t port, const std::vector<std::string>
   ctx.port = port;
   ctx.server_exited = false;
   ctx.server_exit_code = -1;
-  ctx.server_log_path = "/tmp/rs_e2e_server_" + std::to_string(::getpid()) + "_" +
-                        std::to_string(ctx.case_index) + "_" + std::to_string(port) + ".log";
+  ctx.server_log_path = "/tmp/rs_e2e_server_" + std::to_string(::getpid()) + "_" + std::to_string(ctx.case_index) +
+                        "_" + std::to_string(port) + ".log";
   const int log_fd = ::open(ctx.server_log_path.c_str(), O_CREAT | O_TRUNC | O_WRONLY, 0600);
   if (log_fd < 0) {
     out.err = "cannot create server log " + ctx.server_log_path;
     return out;
   }
-  std::vector<std::string> args{RS_DEMO_BIN, "--port", std::to_string(port), "--file", ctx.stream_path, "--ip",
-                                "127.0.0.1"};
+  std::vector<std::string> args{RS_DEMO_BIN,     "--port", std::to_string(port), "--file",
+                                ctx.stream_path, "--ip",   "127.0.0.1"};
   args.insert(args.end(), extra_args.begin(), extra_args.end());
   std::vector<char*> cargv;
   cargv.reserve(args.size() + 1U);
@@ -434,7 +432,7 @@ CaseStart TryStartServer(Ctx& ctx, uint16_t port, const std::vector<std::string>
     } else {
       const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
       if (fd >= 0) {
-        struct sockaddr_in addr {};
+        struct sockaddr_in addr{};
         addr.sin_family = AF_INET;
         addr.sin_port = htons(ctx.port);
         addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
@@ -444,7 +442,7 @@ CaseStart TryStartServer(Ctx& ctx, uint16_t port, const std::vector<std::string>
       if (out.started) {
         decided = true;
       } else {
-        struct timespec pause {0, 50000000};
+        struct timespec pause{0, 50000000};
         static_cast<void>(::nanosleep(&pause, nullptr));
       }
     }
@@ -504,7 +502,7 @@ void StopServer(Ctx& ctx) {
       if (::waitpid(ctx.server_pid, &status, WNOHANG) == ctx.server_pid) {
         reaped = true;
       } else {
-        struct timespec pause {0, 20000000};
+        struct timespec pause{0, 20000000};
         static_cast<void>(::nanosleep(&pause, nullptr));
       }
     }
@@ -526,7 +524,9 @@ std::string SourceDir() {
   return (std::string::npos == slash) ? std::string(".") : file.substr(0U, slash);
 }
 
-std::string RealStreamScript() { return SourceDir() + "/../scripts/make_real_stream.sh"; }
+std::string RealStreamScript() {
+  return SourceDir() + "/../scripts/make_real_stream.sh";
+}
 
 bool PrepareStream(Ctx& ctx, StreamKind kind, std::string& err) {
   const std::string tag = std::to_string(::getpid()) + "_" + std::to_string(ctx.case_index);
@@ -538,8 +538,7 @@ bool PrepareStream(Ctx& ctx, StreamKind kind, std::string& err) {
     ctx.stream_path = "/tmp/rs_e2e_real_" + tag + (h265 ? ".h265" : ".h264");
     // Run the generator through bash explicitly: the script uses bash arrays,
     // and a host whose /bin/sh is dash must not change the outcome.
-    const std::vector<std::string> argv{"/bin/bash", RealStreamScript(), ctx.stream_path,
-                                        h265 ? "h265" : "h264", "4"};
+    const std::vector<std::string> argv{"/bin/bash", RealStreamScript(), ctx.stream_path, h265 ? "h265" : "h264", "4"};
     if (!rse2e::RunProcess(argv, 120000, tool_stdout, tool_stderr, exit_code)) {
       err = "failed to execute " + RealStreamScript();
       return false;
@@ -614,8 +613,7 @@ std::string FfmpegVersionLine() {
   std::string out;
   std::string err_text;
   int exit_code = -1;
-  if (!rse2e::RunProcess({"ffmpeg", "-hide_banner", "-version"}, 10000, out, err_text, exit_code) ||
-      0 != exit_code) {
+  if (!rse2e::RunProcess({"ffmpeg", "-hide_banner", "-version"}, 10000, out, err_text, exit_code) || 0 != exit_code) {
     return "unavailable";
   }
   const size_t eol = out.find('\n');
@@ -650,8 +648,8 @@ bool SendRequest(rse2e::Client& client, uint32_t& cseq, const char* method, cons
 bool ExpectStatus(const rse2e::Response& response, uint32_t want, const char* method, std::string& err) {
   const bool ok = response.status == want;
   if (!ok) {
-    err = std::string(method) + " returned " + std::to_string(response.status) + " " + response.reason +
-          ", expected " + std::to_string(want);
+    err = std::string(method) + " returned " + std::to_string(response.status) + " " + response.reason + ", expected " +
+          std::to_string(want);
   }
   return ok;
 }
@@ -704,8 +702,8 @@ bool ParseU32Text(const std::string& text, uint32_t& out) noexcept {
   return ok;
 }
 
-bool OpenSession(RtspSession& session, const Ctx& ctx, bool tcp, uint16_t client_rtp_port,
-                 rse2e::Response& describe, std::string& err, const char* interleaved = "0-1") {
+bool OpenSession(RtspSession& session, const Ctx& ctx, bool tcp, uint16_t client_rtp_port, rse2e::Response& describe,
+                 std::string& err, const char* interleaved = "0-1") {
   session.base_uri = rse2e::MakeUri("127.0.0.1", ctx.port, "/live");
   session.track_uri = session.base_uri + "/trackID=0";
   bool ok = session.client.Connect("127.0.0.1", ctx.port, static_cast<int>(kConnectTimeoutMs), err);
@@ -728,10 +726,9 @@ bool OpenSession(RtspSession& session, const Ctx& ctx, bool tcp, uint16_t client
   }
   rse2e::Response setup;
   if (ok) {
-    const std::string transport =
-        tcp ? "Transport: RTP/AVP/TCP;unicast;interleaved=" + std::string(interleaved)
-            : "Transport: RTP/AVP;unicast;client_port=" + std::to_string(client_rtp_port) + "-" +
-                  std::to_string(static_cast<uint32_t>(client_rtp_port) + 1U);
+    const std::string transport = tcp ? "Transport: RTP/AVP/TCP;unicast;interleaved=" + std::string(interleaved)
+                                      : "Transport: RTP/AVP;unicast;client_port=" + std::to_string(client_rtp_port) +
+                                            "-" + std::to_string(static_cast<uint32_t>(client_rtp_port) + 1U);
     ok = SendRequest(session.client, session.cseq, "SETUP", session.track_uri, {transport}, "", setup, err) &&
          ExpectStatus(setup, 200U, "SETUP", err);
   }
@@ -809,8 +806,8 @@ bool PushRtp(const rse2e::RtpPacket& packet, MediaCollect& collect, bool& comple
   }
   ++collect.packets;
   std::vector<uint8_t> nal_bytes;
-  const bool reassembled = (Codec::kH265 == collect.codec) ? collect.h265.Push(packet, nal_bytes)
-                                                           : collect.h264.Push(packet, nal_bytes);
+  const bool reassembled =
+      (Codec::kH265 == collect.codec) ? collect.h265.Push(packet, nal_bytes) : collect.h264.Push(packet, nal_bytes);
   if (reassembled) {
     rse2e::NalUnit nal;
     nal.type = rse2e::NalTypeOf(collect.codec, nal_bytes.data(), nal_bytes.size());
@@ -831,8 +828,7 @@ uint32_t SeqGaps(const MediaCollect& collect) noexcept {
   return (Codec::kH265 == collect.codec) ? collect.h265.seq_gaps() : collect.h264.seq_gaps();
 }
 
-bool CollectTcpMedia(rse2e::Client& client, uint32_t wanted_aus, MediaCollect& collect,
-                     uint8_t want_channel = 0U) {
+bool CollectTcpMedia(rse2e::Client& client, uint32_t wanted_aus, MediaCollect& collect, uint8_t want_channel = 0U) {
   const int64_t deadline = NowMs() + kMediaTimeoutMs;
   bool ok = true;
   while (ok && collect.aus.size() < wanted_aus) {
@@ -886,7 +882,7 @@ bool BindUdpPair(uint16_t& base_port, int& rtp_fd, int& rtcp_fd, std::string& er
     if (0U != (candidate & 1U)) {
       ++candidate;
     }
-    struct sockaddr_in addr {};
+    struct sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     addr.sin_port = htons(static_cast<uint16_t>(candidate));
@@ -916,7 +912,7 @@ bool BindUdpPair(uint16_t& base_port, int& rtp_fd, int& rtcp_fd, std::string& er
 }
 
 bool RecvUdp(int fd, std::vector<uint8_t>& out, int timeout_ms) {
-  struct pollfd pfd {};
+  struct pollfd pfd{};
   pfd.fd = fd;
   pfd.events = POLLIN;
   const int ready = ::poll(&pfd, 1, timeout_ms);
@@ -1015,8 +1011,8 @@ bool CompareMediaToFile(MediaCollect& collect, const std::vector<rse2e::AccessUn
       }
     }
     if (ok && compare_count < wanted_aus) {
-      err = "only " + std::to_string(compare_count) + " comparable AUs reassembled, wanted " +
-            std::to_string(wanted_aus);
+      err =
+          "only " + std::to_string(compare_count) + " comparable AUs reassembled, wanted " + std::to_string(wanted_aus);
       ok = false;
     }
   }
@@ -1082,7 +1078,7 @@ bool RunTcpPlaybackWith(Ctx& ctx, const char* interleaved, uint8_t want_channel,
             " truncated_fu=" + std::to_string(collect.h265.truncated_fu()) +
             " ap=" + std::to_string(collect.h265.aggregation_packets());
     } else {
-      std::printf("    [tcp] h265 fu_packets=%u single_nal_packets=%u\n", collect.h265.fu_packets(),
+      std::printf("    [tcp] h265 fu_packets=%" PRIu32 " single_nal_packets=%" PRIu32 "\n", collect.h265.fu_packets(),
                   collect.h265.single_nal_packets());
     }
   }
@@ -1090,17 +1086,17 @@ bool RunTcpPlaybackWith(Ctx& ctx, const char* interleaved, uint8_t want_channel,
     ok = collect.have_first && collect.first_seq == static_cast<uint16_t>(session.rtp_info_seq) &&
          collect.first_ts == session.rtp_info_ts;
     if (!ok) {
-      err = "first RTP packet (seq=" + std::to_string(collect.first_seq) + ", ts=" +
-            std::to_string(collect.first_ts) + ") does not match RTP-Info (seq=" +
-            std::to_string(session.rtp_info_seq) + ", ts=" + std::to_string(session.rtp_info_ts) + ")";
+      err = "first RTP packet (seq=" + std::to_string(collect.first_seq) + ", ts=" + std::to_string(collect.first_ts) +
+            ") does not match RTP-Info (seq=" + std::to_string(session.rtp_info_seq) +
+            ", ts=" + std::to_string(session.rtp_info_ts) + ")";
     }
   }
   if (ok) {
     ok = CompareMediaToFile(collect, ctx.file_aus, 3U, ctx.codec, err);
   }
   if (ok) {
-    std::printf("    [tcp] channel=%u packets=%u aus=%zu max_rtp=%u seq_gaps=%u\n", want_channel,
-                collect.packets, collect.aus.size(), collect.max_frame_bytes, collect.seq_gaps);
+    std::printf("    [tcp] channel=%" PRIu32 " packets=%" PRIu32 " aus=%zu max_rtp=%" PRIu32 " seq_gaps=%" PRIu32 "\n",
+                want_channel, collect.packets, collect.aus.size(), collect.max_frame_bytes, collect.seq_gaps);
   }
   if (ok) {
     ok = session.client.Buffered() <= 4U + kMaxRtpDatagramBytes;
@@ -1112,9 +1108,13 @@ bool RunTcpPlaybackWith(Ctx& ctx, const char* interleaved, uint8_t want_channel,
   return ok;
 }
 
-bool RunTcpPlayback(Ctx& ctx, std::string& err) { return RunTcpPlaybackWith(ctx, "0-1", 0U, err); }
+bool RunTcpPlayback(Ctx& ctx, std::string& err) {
+  return RunTcpPlaybackWith(ctx, "0-1", 0U, err);
+}
 
-bool RunTcpPlaybackChannel2(Ctx& ctx, std::string& err) { return RunTcpPlaybackWith(ctx, "2-3", 2U, err); }
+bool RunTcpPlaybackChannel2(Ctx& ctx, std::string& err) {
+  return RunTcpPlaybackWith(ctx, "2-3", 2U, err);
+}
 
 bool RunUdpPlayback(Ctx& ctx, std::string& err) {
   uint16_t client_port = 0U;
@@ -1139,8 +1139,7 @@ bool RunUdpPlayback(Ctx& ctx, std::string& err) {
     uint32_t rtp_port = 0U;
     uint32_t rtcp_port = 0U;
     const size_t dash = server_port.find('-');
-    ok = !server_port.empty() && (std::string::npos != dash) &&
-         ParseU32Text(server_port.substr(0U, dash), rtp_port) &&
+    ok = !server_port.empty() && (std::string::npos != dash) && ParseU32Text(server_port.substr(0U, dash), rtp_port) &&
          ParseU32Text(server_port.substr(dash + 1U), rtcp_port);
     if (!ok) {
       err = "SETUP response lacks a usable server_port pair: " + session.transport;
@@ -1171,7 +1170,7 @@ bool RunUdpPlayback(Ctx& ctx, std::string& err) {
             " truncated_fu=" + std::to_string(collect.h265.truncated_fu()) +
             " ap=" + std::to_string(collect.h265.aggregation_packets());
     } else {
-      std::printf("    [udp] h265 fu_packets=%u single_nal_packets=%u\n", collect.h265.fu_packets(),
+      std::printf("    [udp] h265 fu_packets=%" PRIu32 " single_nal_packets=%" PRIu32 "\n", collect.h265.fu_packets(),
                   collect.h265.single_nal_packets());
     }
   }
@@ -1198,8 +1197,8 @@ bool RunUdpPlayback(Ctx& ctx, std::string& err) {
       const uint8_t packet_type = rtcp_datagram[1];
       rtcp_note = (200U == packet_type || 201U == packet_type) ? "RTCP: SR/RR observed" : "RTCP: non-SR/RR observed";
     }
-    std::printf("    [udp] %s, packets=%u, max_datagram=%u, seq_gaps=%u\n", rtcp_note.c_str(), collect.packets,
-                collect.max_frame_bytes, collect.seq_gaps);
+    std::printf("    [udp] %s, packets=%" PRIu32 ", max_datagram=%" PRIu32 ", seq_gaps=%" PRIu32 "\n",
+                rtcp_note.c_str(), collect.packets, collect.max_frame_bytes, collect.seq_gaps);
   }
   TeardownSession(session);
   if (rtp_fd >= 0) {
@@ -1230,12 +1229,10 @@ bool RunFfmpegDecode(const Ctx& ctx, const char* transport, std::string& err) {
   const std::string url = rse2e::MakeUri("127.0.0.1", ctx.port, "/live");
   // -progress pipe:1 adds the decoded frame count to stdout; the decode path
   // and the mandated command are otherwise unchanged.
-  const std::vector<std::string> argv{"ffmpeg",          "-hide_banner",           "-v",
-                                      "error",           "-rtsp_transport",         transport,
-                                      "-i",              url,                      "-frames:v",
-                                      std::to_string(kFfmpegFrames),                "-f",
-                                      "null",            "-",                      "-progress",
-                                      "pipe:1",          "-nostats"};
+  const std::vector<std::string> argv{"ffmpeg",  "-hide_banner", "-v", "error",     "-rtsp_transport",
+                                      transport, "-i",           url,  "-frames:v", std::to_string(kFfmpegFrames),
+                                      "-f",      "null",         "-",  "-progress", "pipe:1",
+                                      "-nostats"};
   std::string progress;
   std::string ffmpeg_err;
   int exit_code = -1;
@@ -1248,7 +1245,7 @@ bool RunFfmpegDecode(const Ctx& ctx, const char* transport, std::string& err) {
           "; stderr: " + TailText(TrimText(ffmpeg_err), 1200U);
   } else {
     const std::string warnings = TrimText(ffmpeg_err);
-    std::printf("    [ffmpeg] transport=%s decoded_frames=%u rc=0 stderr_bytes=%zu\n", transport, frames,
+    std::printf("    [ffmpeg] transport=%s decoded_frames=%" PRIu32 " rc=0 stderr_bytes=%zu\n", transport, frames,
                 warnings.size());
     if (!warnings.empty()) {
       std::printf("    [ffmpeg] stderr: %s\n", TailText(warnings, 600U).c_str());
@@ -1265,7 +1262,9 @@ bool RunH265Decode(Ctx& ctx, std::string& err) {
   return ok;
 }
 
-bool RunH264Decode(Ctx& ctx, std::string& err) { return RunFfmpegDecode(ctx, "tcp", err); }
+bool RunH264Decode(Ctx& ctx, std::string& err) {
+  return RunFfmpegDecode(ctx, "tcp", err);
+}
 
 struct ClientJob {
   const Ctx* ctx = nullptr;
@@ -1292,8 +1291,8 @@ void RunOneTcpClient(ClientJob& job) {
       job.err = "no IRAP/IDR AU received";
     } else {
       for (const auto& nal : collect.aus[irap_index].nals) {
-        const bool header_ok = (Codec::kH265 == collect.codec) ? (nal.bytes.size() >= 2U)
-                                                              : (!nal.bytes.empty() && 0U != nal.type);
+        const bool header_ok =
+            (Codec::kH265 == collect.codec) ? (nal.bytes.size() >= 2U) : (!nal.bytes.empty() && 0U != nal.type);
         job.ok = job.ok && header_ok && 0U == (nal.bytes[0] & 0x80U);
       }
       if (!job.ok) {
@@ -1398,7 +1397,7 @@ bool TestSlowClient(Ctx& ctx, std::string& err) {
     }
 
     // POLLRDHUP observes the server's FIN without draining the slow socket.
-    struct pollfd pfd {};
+    struct pollfd pfd{};
     pfd.fd = slow.client.Fd();
     pfd.events = POLLIN | POLLRDHUP | POLLHUP;
     const int64_t close_deadline = NowMs() + 2500;
@@ -1406,12 +1405,12 @@ bool TestSlowClient(Ctx& ctx, std::string& err) {
       const int ready = ::poll(&pfd, 1, RemainingMs(close_deadline));
       slow_closed = ready > 0 && (0 != (pfd.revents & (POLLRDHUP | POLLHUP)));
       if (!slow_closed) {
-        struct timespec pause {0, 20000000};
+        struct timespec pause{0, 20000000};
         static_cast<void>(::nanosleep(&pause, nullptr));
       }
     }
-    std::printf("    [slow] healthy frames=%u max_gap=%lld ms slow_closed=%s\n", frames,
-                static_cast<long long>(max_gap_ms), slow_closed ? "yes" : "no");
+    std::printf("    [slow] healthy frames=%" PRIu32 " max_gap=%" PRIi64 " ms slow_closed=%s\n", frames,
+                static_cast<int64_t>(max_gap_ms), slow_closed ? "yes" : "no");
     ok = frames > 0U && max_gap_ms < 1500;
     if (0U == frames) {
       err = "healthy client received no media while the slow client was silent";
@@ -1449,8 +1448,8 @@ bool TestErrorPaths(Ctx& ctx, std::string& err) {
   RtspSession bad_transport;
   if (ok) {
     ok = bad_transport.client.Connect("127.0.0.1", ctx.port, static_cast<int>(kConnectTimeoutMs), err) &&
-         SendRequest(bad_transport.client, bad_transport.cseq, "SETUP", track,
-                     {"Transport: RTP/AVP;multicast;ttl=16"}, "", response, err) &&
+         SendRequest(bad_transport.client, bad_transport.cseq, "SETUP", track, {"Transport: RTP/AVP;multicast;ttl=16"},
+                     "", response, err) &&
          ExpectStatus(response, 461U, "SETUP multicast", err);
   }
   bad_transport.client.Close();
@@ -1490,12 +1489,11 @@ struct Case {
 
 int main() {
   const pid_t own_pid = ::getpid();
-  std::printf("test_e2e: demo=%s stream_tool=%s pid=%d\n", RS_DEMO_BIN, RS_STREAM_TOOL,
-              static_cast<int>(own_pid));
+  std::printf("test_e2e: demo=%s stream_tool=%s pid=%d\n", RS_DEMO_BIN, RS_STREAM_TOOL, static_cast<int>(own_pid));
   const bool ffmpeg_ok = HaveFfmpeg();
   std::printf("test_e2e: ffmpeg=%s (%s)\n", ffmpeg_ok ? "available" : "MISSING", FfmpegVersionLine().c_str());
   g_port_salt = InitPortSalt();
-  std::printf("test_e2e: port_base=%u (salt=%u)\n", CaseBasePort(0U), g_port_salt);
+  std::printf("test_e2e: port_base=%" PRIu32 " (salt=%" PRIu32 ")\n", CaseBasePort(0U), g_port_salt);
   ReportForeignDemoProcesses(own_pid, "suite-start");
 
   const Case cases[] = {
@@ -1507,20 +1505,17 @@ int main() {
       {"eight_concurrent_tcp_clients", "T-COMM-02 T-COMM-10", StreamKind::kSynthH264, nullptr, false, false,
        TestConcurrentClients},
       {"connection_limit_17th", "T-LIMIT-01", StreamKind::kSynthH264, nullptr, false, false, TestConnectionLimit},
-      {"slow_client_isolation", "T-LIMIT-02 F-02/F-05", StreamKind::kSynthH264, nullptr, false, false,
-       TestSlowClient},
+      {"slow_client_isolation", "T-LIMIT-02 F-02/F-05", StreamKind::kSynthH264, nullptr, false, false, TestSlowClient},
       {"error_paths", "T-RTSP-404/454/461, duplicate SETUP", StreamKind::kSynthH264, nullptr, false, false,
        TestErrorPaths},
       {"h265_tcp_playback", "T-MEDIA-H265-01 T-COMM-07 T-COMM-08", StreamKind::kSynthH265, "auto", false, false,
        RunTcpPlayback},
-      {"h265_udp_playback", "T-MEDIA-H265-02 T-COMM-08", StreamKind::kSynthH265, "auto", false, false,
-       RunUdpPlayback},
+      {"h265_udp_playback", "T-MEDIA-H265-02 T-COMM-08", StreamKind::kSynthH265, "auto", false, false, RunUdpPlayback},
       {"h265_ffmpeg_decode", "T-COMM-08 H265 decode tcp+udp", StreamKind::kRealH265, "auto", false, true,
        RunH265Decode},
       {"h264_regression_decode", "T-COMM-08 H264 regression tcp", StreamKind::kRealH264, "h264", false, true,
        RunH264Decode},
-      {"codec_mismatch", "T-COMM-09 unsupported codec rejected", StreamKind::kSynthH265, "h264", true, false,
-       nullptr},
+      {"codec_mismatch", "T-COMM-09 unsupported codec rejected", StreamKind::kSynthH265, "h264", true, false, nullptr},
   };
 
   uint32_t passed = 0U;
@@ -1554,8 +1549,7 @@ int main() {
         ok = start.exited && start.exit_code != 0 && !TrimText(start.stderr_text).empty();
         if (ok) {
           std::printf("    [expect] server refused to start: exit=%d\n", start.exit_code);
-          std::printf("    [expect] server stderr: %s\n",
-                      TailText(TrimText(start.stderr_text), 300U).c_str());
+          std::printf("    [expect] server stderr: %s\n", TailText(TrimText(start.stderr_text), 300U).c_str());
         } else if (!start.exited) {
           err = "server started for an unsupported codec combination (exit expected)";
         } else if (0 == start.exit_code) {
@@ -1566,9 +1560,9 @@ int main() {
       } else {
         ok = start.started;
         if (!ok) {
-          err = start.exited ? ("server exited before accepting connections (exit=" +
-                               std::to_string(start.exit_code) + ")")
-                             : (start.err.empty() ? "server did not start" : start.err);
+          err = start.exited
+                    ? ("server exited before accepting connections (exit=" + std::to_string(start.exit_code) + ")")
+                    : (start.err.empty() ? "server did not start" : start.err);
         }
       }
     }
@@ -1589,15 +1583,15 @@ int main() {
     const int64_t elapsed_ms = NowMs() - started_ms;
     if (ok) {
       ++passed;
-      std::printf("[PASS] %s (%s) %lld ms\n", test.name, test.matrix, static_cast<long long>(elapsed_ms));
+      std::printf("[PASS] %s (%s) %" PRIi64 " ms\n", test.name, test.matrix, static_cast<int64_t>(elapsed_ms));
     } else {
       ++failed;
       if (was_skipped) {
         ++skipped;
-        std::printf("[FAIL][SKIP] %s (%s) %lld ms\n  reason: %s\n", test.name, test.matrix,
-                    static_cast<long long>(elapsed_ms), err.c_str());
+        std::printf("[FAIL][SKIP] %s (%s) %" PRIi64 " ms\n  reason: %s\n", test.name, test.matrix,
+                    static_cast<int64_t>(elapsed_ms), err.c_str());
       } else {
-        std::printf("[FAIL] %s (%s) %lld ms\n", test.name, test.matrix, static_cast<long long>(elapsed_ms));
+        std::printf("[FAIL] %s (%s) %" PRIi64 " ms\n", test.name, test.matrix, static_cast<int64_t>(elapsed_ms));
         std::fprintf(stderr, "  reason: %s\n", err.c_str());
         PrintServerLog(ctx);
       }
@@ -1607,7 +1601,7 @@ int main() {
     }
   }
 
-  std::printf("test_e2e: %u passed, %u failed (%u skipped), %u cases\n", passed, failed, skipped,
-              static_cast<uint32_t>(sizeof(cases) / sizeof(cases[0])));
+  std::printf("test_e2e: %" PRIu32 " passed, %" PRIu32 " failed (%" PRIu32 " skipped), %" PRIu32 " cases\n", passed,
+              failed, skipped, static_cast<uint32_t>(sizeof(cases) / sizeof(cases[0])));
   return (0U == failed) ? 0 : 1;
 }

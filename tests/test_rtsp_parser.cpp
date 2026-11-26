@@ -166,9 +166,10 @@ int main() {
   {
     rs::RtspParser parser;
     Capture c;
-    static const char head[] = "$\x02\x00\x03\xAA\xBB\xCC""OPTIONS * RTSP/1.0\r\nCSeq: 9\r\n\r\n";
-    const auto r =
-        parser.Feed(reinterpret_cast<const uint8_t*>(head), sizeof(head) - 1U, Callbacks(c));
+    static const char head[] =
+        "$\x02\x00\x03\xAA\xBB\xCC"
+        "OPTIONS * RTSP/1.0\r\nCSeq: 9\r\n\r\n";
+    const auto r = parser.Feed(reinterpret_cast<const uint8_t*>(head), sizeof(head) - 1U, Callbacks(c));
     RS_CHECK(r.has_value());
     RS_CHECK_EQ(c.frames, 1U);
     RS_CHECK_EQ(c.channel, static_cast<uint8_t>(2U));
@@ -198,8 +199,9 @@ int main() {
   {
     rs::RtspParser parser;
     Capture c;
-    const auto r = FeedText(parser, c, "SETUP /x RTSP/1.0\r\nContent-Length: 1\r\n\r\n$"
-                                       "OPTIONS * RTSP/1.0\r\n\r\n");
+    const auto r = FeedText(parser, c,
+                            "SETUP /x RTSP/1.0\r\nContent-Length: 1\r\n\r\n$"
+                            "OPTIONS * RTSP/1.0\r\n\r\n");
     RS_CHECK(r.has_value());
     RS_CHECK_EQ(c.frames, 0U);
     RS_CHECK_EQ(c.requests, 2U);
@@ -322,8 +324,8 @@ int main() {
       used += static_cast<uint32_t>(n);
     }
     std::snprintf(text + used, sizeof(text) - used, "\r\n");
-    const auto r = parser.Feed(reinterpret_cast<const uint8_t*>(text), static_cast<uint32_t>(std::strlen(text)),
-                               Callbacks(c));
+    const auto r =
+        parser.Feed(reinterpret_cast<const uint8_t*>(text), static_cast<uint32_t>(std::strlen(text)), Callbacks(c));
     RS_CHECK(!r.has_value());
     RS_CHECK_EQ(r.get_error(), rs::ParseError::kTooManyHeaders);
   }

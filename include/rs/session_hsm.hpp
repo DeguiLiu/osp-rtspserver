@@ -44,27 +44,12 @@ struct HsmTrace {
 // ---------------------------------------------------------------------------
 namespace svc {
 
-enum State : int32_t {
-  kRoot = 0,
-  kInit,
-  kReady,
-  kRunning,
-  kStopping,
-  kStopped,
-  kFailed
-};
+enum State : int32_t { kRoot = 0, kInit, kReady, kRunning, kStopping, kStopped, kFailed };
 
 constexpr uint32_t kStateCount = 7U;
 constexpr uint32_t kTransitionCount = 11U;
 
-enum Event : uint32_t {
-  kStartReady = 1U,
-  kThreadStarted,
-  kStartFail,
-  kStopRequested,
-  kDrainDone,
-  kFatal
-};
+enum Event : uint32_t { kStartReady = 1U, kThreadStarted, kStartFail, kStopRequested, kDrainDone, kFatal };
 
 struct Context {
   // Guard inputs, set by the owning thread before Dispatch.
@@ -113,29 +98,14 @@ class Hsm {
 // ---------------------------------------------------------------------------
 namespace sess {
 
-enum State : int32_t {
-  kRoot = 0,
-  kInit,
-  kActive,
-  kReady,
-  kPlaying,
-  kClosing
-};
+enum State : int32_t { kRoot = 0, kInit, kActive, kReady, kPlaying, kClosing };
 
 constexpr uint32_t kStateCount = 6U;
 constexpr uint32_t kTransitionCount = 11U;
 
 [[nodiscard]] const char* StateName(int32_t state) noexcept;
 
-enum Event : uint32_t {
-  kSetupOk = 1U,
-  kSetupFail,
-  kPlayOk,
-  kTeardown,
-  kTimeout,
-  kPeerClosed,
-  kCloseDone
-};
+enum Event : uint32_t { kSetupOk = 1U, kSetupFail, kPlayOk, kTeardown, kTimeout, kPeerClosed, kCloseDone };
 
 struct Context {
   // Guard input: resources for SETUP were acquired outside the HSM.

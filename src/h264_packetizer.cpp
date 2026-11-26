@@ -150,7 +150,7 @@ osp::expected<RtpPacket, PacketizeError> H264Packetizer::Next(const uint8_t* au,
     cursor.in_au = false;
     const bool too_large = (nullptr != au) && (cursor.au_len <= au_len);
     return osp::expected<RtpPacket, PacketizeError>::error(too_large ? PacketizeError::kTooLarge
-                                                                    : PacketizeError::kBadNal);
+                                                                     : PacketizeError::kBadNal);
   }
   uint32_t next_offset = cursor.nal_offset;
   NalUnit nal;
@@ -198,8 +198,8 @@ osp::expected<RtpPacket, PacketizeError> H264Packetizer::Next(const uint8_t* au,
   const bool last_fragment = (frag_end >= nal_len);
   const uint8_t nal_header = static_cast<uint8_t>(nal.data[0]);
   cursor.fu_header[0] = static_cast<uint8_t>((nal_header & 0xE0U) | kFuAType);
-  cursor.fu_header[1] = static_cast<uint8_t>((first ? kFuStartMask : 0x00U) |
-                                             (last_fragment ? kFuEndMask : 0x00U) | (nal_header & kNalTypeMask));
+  cursor.fu_header[1] = static_cast<uint8_t>((first ? kFuStartMask : 0x00U) | (last_fragment ? kFuEndMask : 0x00U) |
+                                             (nal_header & kNalTypeMask));
   const bool last = last_fragment && !HasNextNal(au, cursor.au_len, next_offset);
   WriteRtpHeader(cursor, ssrc, last);
   RtpPacket packet;

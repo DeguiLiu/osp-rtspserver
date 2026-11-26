@@ -45,7 +45,9 @@ void WriteBe32(uint8_t* p, uint32_t value) noexcept {
   p[3] = static_cast<uint8_t>(value);
 }
 
-uint32_t AlignUp4(uint32_t value) noexcept { return (value + 3U) & ~3U; }
+uint32_t AlignUp4(uint32_t value) noexcept {
+  return (value + 3U) & ~3U;
+}
 
 // CNAME length as carried in SDES: limited to 255 bytes by the 8-bit field.
 uint32_t CnameLength(const char* cname) noexcept {
@@ -62,8 +64,8 @@ uint32_t CnameLength(const char* cname) noexcept {
 void ReadReportBlock(const uint8_t* block, RrReport& report) noexcept {
   report.ssrc = ReadBe32(block);
   report.fraction_lost = block[4];
-  const uint32_t lost = (static_cast<uint32_t>(block[5]) << 16U) |
-                        (static_cast<uint32_t>(block[6]) << 8U) | static_cast<uint32_t>(block[7]);
+  const uint32_t lost = (static_cast<uint32_t>(block[5]) << 16U) | (static_cast<uint32_t>(block[6]) << 8U) |
+                        static_cast<uint32_t>(block[7]);
   report.cumulative_lost =
       (0U != (lost & 0x00800000U)) ? (static_cast<int32_t>(lost) - 0x01000000) : static_cast<int32_t>(lost);
   report.extended_highest_seq = ReadBe32(block + 8U);
@@ -109,9 +111,9 @@ bool ParsePacket(const uint8_t* packet, uint32_t bytes, bool first, RtcpSummary&
 
 }  // namespace
 
-osp::expected<uint32_t, RtcpError> BuildSenderReport(osp::writable_byte_span out, uint32_t ssrc,
-                                                     uint64_t ntp_now_ns, uint32_t rtp_ts,
-                                                     uint32_t packet_count, uint32_t octet_count) noexcept {
+osp::expected<uint32_t, RtcpError> BuildSenderReport(osp::writable_byte_span out, uint32_t ssrc, uint64_t ntp_now_ns,
+                                                     uint32_t rtp_ts, uint32_t packet_count,
+                                                     uint32_t octet_count) noexcept {
   if (nullptr == out.data() || out.size() < static_cast<size_t>(kSenderReportBytes)) {
     return osp::expected<uint32_t, RtcpError>::error(RtcpError::kBufferTooSmall);
   }
@@ -167,9 +169,8 @@ osp::expected<RtcpSummary, RtcpError> ParseCompound(const uint8_t* data, uint32_
 }
 
 osp::expected<uint32_t, RtcpError> BuildSenderReportWithSdes(osp::writable_byte_span out, uint32_t ssrc,
-                                                             const char* cname, uint64_t ntp_now_ns,
-                                                             uint32_t rtp_ts, uint32_t packet_count,
-                                                             uint32_t octet_count) noexcept {
+                                                             const char* cname, uint64_t ntp_now_ns, uint32_t rtp_ts,
+                                                             uint32_t packet_count, uint32_t octet_count) noexcept {
   const uint32_t cname_length = CnameLength(cname);
   const uint32_t sdes_bytes = kSdesHeaderBytes + AlignUp4(kSdesChunkFixedBytes + cname_length + 1U);
   const uint32_t total_bytes = kSenderReportBytes + sdes_bytes;

@@ -6,26 +6,28 @@
 //   3. UpdateTrackParams() when SPS/PPS change (old sessions are closed).
 // The slice payload is synthetic; only the call sequence is meant to be copied.
 // SPDX-License-Identifier: MIT
+#include "osp/platform.hpp"
 #include "rs/rtsp_server.hpp"
 
-#include "osp/platform.hpp"
-
-#include <atomic>
-#include <chrono>
+#include <cinttypes>
 #include <csignal>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <thread>
 
+#include <atomic>
+#include <chrono>
 #include <signal.h>
+#include <thread>
 
 namespace {
 
 volatile std::sig_atomic_t g_stop = 0;
 
-void OnSignal(int /*sig*/) { g_stop = 1; }
+void OnSignal(int /*sig*/) {
+  g_stop = 1;
+}
 
 // Baseline-profile H.264 parameter sets. Version 2 changes level_idc so the
 // new SDP is visibly different while staying inside ValidateParamSets().
@@ -66,8 +68,7 @@ uint32_t AppendNal(uint8_t* dst, uint32_t cap, const uint8_t* nal, uint32_t len)
 }
 
 // AUD [+ SPS/PPS on IDR] + one synthetic slice. 0x21..0x9F avoids start codes.
-uint32_t BuildAu(uint8_t* dst, uint32_t cap, bool idr, uint32_t frame_index, const uint8_t* sps,
-                 uint32_t sps_len) {
+uint32_t BuildAu(uint8_t* dst, uint32_t cap, bool idr, uint32_t frame_index, const uint8_t* sps, uint32_t sps_len) {
   uint32_t off = AppendNal(dst, cap, kAud, sizeof(kAud));
   if (off == 0U) {
     return 0U;
@@ -107,8 +108,7 @@ void ProducerMain(rs::RtspServer& server, EncoderState& state) {
   uint32_t frame_index = 0U;
   uint32_t dropped = 0U;
 
-  const uint64_t refresh_at =
-      pts_ns + static_cast<uint64_t>(kParamsRefreshFrames) * kFrameIntervalMs * rs::kNsPerMs;
+  const uint64_t refresh_at = pts_ns + static_cast<uint64_t>(kParamsRefreshFrames) * kFrameIntervalMs * rs::kNsPerMs;
   const uint64_t period_ns = static_cast<uint64_t>(kFrameIntervalMs) * rs::kNsPerMs;
 
   while (g_stop == 0 && !server.StopRequested()) {
@@ -149,9 +149,10 @@ void ProducerMain(rs::RtspServer& server, EncoderState& state) {
     }
 
     if (frame_index != 0U && (frame_index % kGopFrames) == 0U) {
-      std::printf("encoder_source_demo: frame=%u idr_requests=%u dropped=%u param_gen=%u\n", frame_index,
-                  state.idr_requests.load(std::memory_order_relaxed), dropped,
-                  static_cast<unsigned>(server.Stats().param_gen));
+      std::printf("encoder_source_demo: frame=%" PRIu32 " idr_requests=%" PRIu32 " dropped=%" PRIu32
+                  " param_gen=%" PRIu32 "\n",
+                  frame_index, state.idr_requests.load(std::memory_order_relaxed), dropped,
+                  static_cast<uint32_t>(server.Stats().param_gen));
       std::fflush(stdout);
     }
     ++frame_index;
@@ -179,8 +180,9 @@ void ProducerMain(rs::RtspServer& server, EncoderState& state) {
       std::this_thread::sleep_for(std::chrono::nanoseconds(pts_ns - now));
     }
   }
-  std::printf("encoder_source_demo: producer stopped, frames=%u idr_requests=%u dropped=%u\n", frame_index,
-              state.idr_requests.load(std::memory_order_relaxed), dropped);
+  std::printf("encoder_source_demo: producer stopped, frames=%" PRIu32 " idr_requests=%" PRIu32 " dropped=%" PRIu32
+              "\n",
+              frame_index, state.idr_requests.load(std::memory_order_relaxed), dropped);
 }
 
 }  // namespace
@@ -207,7 +209,7 @@ int main(int argc, char** argv) {
     }
   }
 
-  struct sigaction sa {};
+  struct sigaction sa{};
   sa.sa_handler = &OnSignal;
   static_cast<void>(sigemptyset(&sa.sa_mask));
   static_cast<void>(sigaction(SIGINT, &sa, nullptr));
@@ -218,12 +220,12 @@ int main(int argc, char** argv) {
   server.SetIdrRequester(&OnIdrRequest, &state);
   const auto started = server.Start(cfg);
   if (!started.has_value()) {
-    std::fprintf(stderr, "encoder_source_demo: start failed (error %u)\n",
-                 static_cast<unsigned>(started.get_error()));
+    std::fprintf(stderr, "encoder_source_demo: start failed (error %" PRIu32 ")\n",
+                 static_cast<uint32_t>(started.get_error()));
     return 1;
   }
-  std::printf("encoder_source_demo: rtsp://%s:%u/live (Ctrl-C to stop)\n", cfg.advertise_ip,
-              static_cast<unsigned>(cfg.port));
+  std::printf("encoder_source_demo: rtsp://%s:%" PRIu32 "/live (Ctrl-C to stop)\n", cfg.advertise_ip,
+              static_cast<uint32_t>(cfg.port));
   std::fflush(stdout);
 
   std::thread producer(ProducerMain, std::ref(server), std::ref(state));

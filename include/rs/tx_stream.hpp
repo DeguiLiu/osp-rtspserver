@@ -5,9 +5,8 @@
 #ifndef RS_TX_STREAM_HPP_
 #define RS_TX_STREAM_HPP_
 
-#include "rs/config.hpp"
-
 #include "osp/span.hpp"
+#include "rs/config.hpp"
 
 #include <cstdint>
 #include <cstring>

@@ -99,8 +99,7 @@ uint32_t Base64Encode(const uint8_t* src, uint32_t len, char* dst, uint32_t cap)
   uint32_t in = 0U;
   uint32_t out = 0U;
   for (uint32_t g = 0U; g < groups; ++g) {
-    const uint32_t word = (static_cast<uint32_t>(src[in]) << 16U) |
-                          (static_cast<uint32_t>(src[in + 1U]) << 8U) |
+    const uint32_t word = (static_cast<uint32_t>(src[in]) << 16U) | (static_cast<uint32_t>(src[in + 1U]) << 8U) |
                           static_cast<uint32_t>(src[in + 2U]);
     in += 3U;
     dst[out] = kBase64Table[(word >> 18U) & 0x3FU];
@@ -117,8 +116,7 @@ uint32_t Base64Encode(const uint8_t* src, uint32_t len, char* dst, uint32_t cap)
     dst[out + 3U] = '=';
     out += 4U;
   } else if (2U == rem) {
-    const uint32_t word = (static_cast<uint32_t>(src[in]) << 16U) |
-                          (static_cast<uint32_t>(src[in + 1U]) << 8U);
+    const uint32_t word = (static_cast<uint32_t>(src[in]) << 16U) | (static_cast<uint32_t>(src[in + 1U]) << 8U);
     dst[out] = kBase64Table[(word >> 18U) & 0x3FU];
     dst[out + 1U] = kBase64Table[(word >> 12U) & 0x3FU];
     dst[out + 2U] = kBase64Table[(word >> 6U) & 0x3FU];
@@ -128,8 +126,7 @@ uint32_t Base64Encode(const uint8_t* src, uint32_t len, char* dst, uint32_t cap)
   return out;
 }
 
-osp::expected<uint32_t, SdpError> BuildSdp(const SdpParams& params,
-                                           osp::writable_byte_span out) noexcept {
+osp::expected<uint32_t, SdpError> BuildSdp(const SdpParams& params, osp::writable_byte_span out) noexcept {
   const char* ip = params.server_ip;
   const char* name = params.session_name;
   const bool h265 = (Codec::kH265 == params.codec);
@@ -138,11 +135,10 @@ osp::expected<uint32_t, SdpError> BuildSdp(const SdpParams& params,
   }
   // H.264 profile-level-id is built from SPS bytes 1..3, so four bytes are the
   // minimum there. H.265 requires all three parameter sets, any length > 0.
-  const bool params_ok =
-      h265 ? ((nullptr != params.vps) && (0U != params.vps_len) && (nullptr != params.sps) &&
-              (0U != params.sps_len) && (nullptr != params.pps) && (0U != params.pps_len))
-           : ((nullptr != params.sps) && (0U != params.sps_len) && (params.sps_len >= 4U) &&
-              (nullptr != params.pps) && (0U != params.pps_len));
+  const bool params_ok = h265 ? ((nullptr != params.vps) && (0U != params.vps_len) && (nullptr != params.sps) &&
+                                 (0U != params.sps_len) && (nullptr != params.pps) && (0U != params.pps_len))
+                              : ((nullptr != params.sps) && (0U != params.sps_len) && (params.sps_len >= 4U) &&
+                                 (nullptr != params.pps) && (0U != params.pps_len));
   if (!params_ok) {
     return osp::expected<uint32_t, SdpError>::error(SdpError::kBadParamSet);
   }
@@ -151,8 +147,7 @@ osp::expected<uint32_t, SdpError> BuildSdp(const SdpParams& params,
   ok = ok && w.Append("v=0\r\n");
   // RTSP DESCRIBE has no separate session id parameter; the per-client SSRC is
   // the stable, non-zero origin identity for this track.
-  ok = ok && w.Append("o=- ") && w.AppendU32(params.ssrc) && w.Append(" 0 IN IP4 ") && w.Append(ip) &&
-       w.Append("\r\n");
+  ok = ok && w.Append("o=- ") && w.AppendU32(params.ssrc) && w.Append(" 0 IN IP4 ") && w.Append(ip) && w.Append("\r\n");
   ok = ok && w.Append("s=") && w.Append(name) && w.Append("\r\n");
   ok = ok && w.Append("c=IN IP4 ") && w.Append(ip) && w.Append("\r\n");
   ok = ok && w.Append("t=0 0\r\n");
@@ -172,9 +167,8 @@ osp::expected<uint32_t, SdpError> BuildSdp(const SdpParams& params,
          w.AppendU32(params.clock_rate) && w.Append("\r\n");
     ok = ok && w.Append("a=fmtp:") && w.AppendU32(params.payload_type) &&
          w.Append(" packetization-mode=1;profile-level-id=") && w.AppendHexByte(params.sps[1]) &&
-         w.AppendHexByte(params.sps[2]) && w.AppendHexByte(params.sps[3]) &&
-         w.Append(";sprop-parameter-sets=") && AppendBase64(w, params.sps, params.sps_len) &&
-         w.Append(",") && AppendBase64(w, params.pps, params.pps_len);
+         w.AppendHexByte(params.sps[2]) && w.AppendHexByte(params.sps[3]) && w.Append(";sprop-parameter-sets=") &&
+         AppendBase64(w, params.sps, params.sps_len) && w.Append(",") && AppendBase64(w, params.pps, params.pps_len);
   }
   ok = ok && w.Append("\r\n");
   ok = ok && w.Append("a=control:trackID=0\r\n");

@@ -257,17 +257,28 @@ int TestSixteenIndependentSessions() {
 }  // namespace
 
 int main() {
-  if (TestServiceTables() != 0) return 1;
-  if (TestServiceHappyPath() != 0) return 1;
-  if (TestServiceGuardRejection() != 0) return 1;
-  if (TestServiceFatal() != 0) return 1;
-  if (TestServiceCallbackOrder() != 0) return 1;
-  if (TestSessionTables() != 0) return 1;
-  if (TestSessionSetupGuardAndRollback() != 0) return 1;
-  if (TestSessionPlayAndTeardown() != 0) return 1;
-  if (TestSessionParentInheritance() != 0) return 1;
-  if (TestSessionOrderAndRestart() != 0) return 1;
-  if (TestSixteenIndependentSessions() != 0) return 1;
+  if (TestServiceTables() != 0)
+    return 1;
+  if (TestServiceHappyPath() != 0)
+    return 1;
+  if (TestServiceGuardRejection() != 0)
+    return 1;
+  if (TestServiceFatal() != 0)
+    return 1;
+  if (TestServiceCallbackOrder() != 0)
+    return 1;
+  if (TestSessionTables() != 0)
+    return 1;
+  if (TestSessionSetupGuardAndRollback() != 0)
+    return 1;
+  if (TestSessionPlayAndTeardown() != 0)
+    return 1;
+  if (TestSessionParentInheritance() != 0)
+    return 1;
+  if (TestSessionOrderAndRestart() != 0)
+    return 1;
+  if (TestSixteenIndependentSessions() != 0)
+    return 1;
   std::printf("test_hsm: all checks passed\n");
   return 0;
 }

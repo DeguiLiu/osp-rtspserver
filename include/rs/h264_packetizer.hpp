@@ -6,13 +6,13 @@
 #ifndef RS_H264_PACKETIZER_HPP_
 #define RS_H264_PACKETIZER_HPP_
 
-#include "rs/config.hpp"
-
 #include "osp/span.hpp"
 #include "osp/vocabulary.hpp"
+#include "rs/config.hpp"
+
+#include <cstdint>
 
 #include <array>
-#include <cstdint>
 #include <type_traits>
 
 namespace rs {
@@ -42,9 +42,9 @@ struct ParamSets {
 };
 
 struct RtpPacket {
-  const uint8_t* header = nullptr;   // 12-byte RTP header (per-client scratch).
+  const uint8_t* header = nullptr;  // 12-byte RTP header (per-client scratch).
   uint32_t header_len = 0U;
-  const uint8_t* prefix = nullptr;   // FU indicator/header (per-client scratch); 0 bytes for a single NAL.
+  const uint8_t* prefix = nullptr;  // FU indicator/header (per-client scratch); 0 bytes for a single NAL.
   uint32_t prefix_len = 0U;
   const uint8_t* payload = nullptr;  // RTP payload bytes (shared AU, read-only, zero-copy).
   uint32_t payload_len = 0U;
@@ -54,10 +54,10 @@ struct RtpPacket {
 static_assert(std::is_standard_layout<RtpPacket>::value, "RtpPacket is a plain wire view");
 
 enum class PacketizeError : uint8_t {
-  kEndOfAu = 0,     // All packets of this AU have been produced.
-  kBadNal = 1,      // No start code / truncated NAL / reserved type 0.
-  kTooLarge = 2,    // AU exceeds kMaxAuBytes while scanning.
-  kNotConfigured = 3 // IDR without SPS/PPS available.
+  kEndOfAu = 0,       // All packets of this AU have been produced.
+  kBadNal = 1,        // No start code / truncated NAL / reserved type 0.
+  kTooLarge = 2,      // AU exceeds kMaxAuBytes while scanning.
+  kNotConfigured = 3  // IDR without SPS/PPS available.
 };
 
 // Scans the next Annex B NAL unit starting at `offset` (offset points at the
@@ -74,7 +74,7 @@ struct ClientCursor {
   uint32_t au_len = 0U;
   uint16_t seq = 0U;
   uint32_t ts = 0U;
-  uint8_t param_stage = 2U;   // 0 = send SPS, 1 = send PPS, 2 = done.
+  uint8_t param_stage = 2U;  // 0 = send SPS, 1 = send PPS, 2 = done.
   bool await_idr = true;
   bool in_au = false;
   bool marker_sent = false;
@@ -94,8 +94,7 @@ class H264Packetizer {
 
   // Produces the next RTP packet view for this AU, or kEndOfAu.
   [[nodiscard]] static osp::expected<RtpPacket, PacketizeError> Next(const uint8_t* au, uint32_t au_len,
-                                                                     const ParamSets& params,
-                                                                     ClientCursor& cursor,
+                                                                     const ParamSets& params, ClientCursor& cursor,
                                                                      uint32_t ssrc) noexcept;
 };
 

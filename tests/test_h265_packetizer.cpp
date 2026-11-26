@@ -49,8 +49,7 @@ struct AuBuilder {
 };
 
 uint16_t Seq(const PacketCopy& p) {
-  return static_cast<uint16_t>((static_cast<uint16_t>(p.header[2]) << 8U) |
-                               static_cast<uint16_t>(p.header[3]));
+  return static_cast<uint16_t>((static_cast<uint16_t>(p.header[2]) << 8U) | static_cast<uint16_t>(p.header[3]));
 }
 
 uint32_t Ts(const PacketCopy& p) {
@@ -63,8 +62,8 @@ uint32_t Ssrc(const PacketCopy& p) {
          (static_cast<uint32_t>(p.header[10]) << 8U) | static_cast<uint32_t>(p.header[11]);
 }
 
-bool Collect(const uint8_t* au, uint32_t au_len, const rs::HevcParamSets& params, rs::HevcCursor& cursor,
-             uint32_t ssrc, PacketCopy* out, uint32_t max, uint32_t& count) {
+bool Collect(const uint8_t* au, uint32_t au_len, const rs::HevcParamSets& params, rs::HevcCursor& cursor, uint32_t ssrc,
+             PacketCopy* out, uint32_t max, uint32_t& count) {
   count = 0U;
   bool ok = true;
   while (ok && (count < max)) {
@@ -271,7 +270,7 @@ int main() {
     uint32_t count = 0U;
     RS_CHECK(Collect(au.data, au.len, empty, cursor, 0x01020304U, packets, 4U, count));
     RS_CHECK_EQ(count, 2U);
-    RS_CHECK_EQ(packets[0].body_len, 1200U);          // 3-byte prefix + 1197 fragment bytes.
+    RS_CHECK_EQ(packets[0].body_len, 1200U);  // 3-byte prefix + 1197 fragment bytes.
     RS_CHECK_EQ(packets[0].prefix_len, 3U);
     RS_CHECK_EQ(packets[0].payload_len, 1197U);
     RS_CHECK_EQ(packets[0].prefix[0], static_cast<uint8_t>(0x62U));  // F=0, type 49

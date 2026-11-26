@@ -4,16 +4,15 @@
 #ifndef RS_FILE_SOURCE_HPP_
 #define RS_FILE_SOURCE_HPP_
 
+#include "osp/vocabulary.hpp"
 #include "rs/codec.hpp"
 #include "rs/config.hpp"
 #include "rs/frame_ingress.hpp"
 
-#include "osp/vocabulary.hpp"
-
-#include <atomic>
 #include <cstdint>
 #include <cstdio>
 
+#include <atomic>
 #include <pthread.h>
 
 namespace rs {

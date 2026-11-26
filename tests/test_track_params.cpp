@@ -6,17 +6,18 @@
 #include "rs/rtsp_server.hpp"
 #include "rs/sdp.hpp"
 
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <unistd.h>
-
-#include <atomic>
-#include <chrono>
+#include <cinttypes>
 #include <cstdio>
 #include <cstring>
+
+#include <arpa/inet.h>
+#include <atomic>
+#include <chrono>
+#include <netinet/in.h>
 #include <string>
+#include <sys/socket.h>
 #include <thread>
+#include <unistd.h>
 
 namespace {
 
@@ -133,8 +134,8 @@ int main() {
   const int client = ConnectClient();
   RS_CHECK(client >= 0);
   char describe[256];
-  std::snprintf(describe, sizeof(describe), "DESCRIBE rtsp://127.0.0.1:%u/live RTSP/1.0\r\nCSeq: 1\r\n\r\n",
-                static_cast<unsigned>(kPort));
+  std::snprintf(describe, sizeof(describe), "DESCRIBE rtsp://127.0.0.1:%" PRIu32 "/live RTSP/1.0\r\nCSeq: 1\r\n\r\n",
+                static_cast<uint32_t>(kPort));
   RS_CHECK(SendAll(client, describe));
   const std::string old_sdp = ReadResponse(client);
   RS_CHECK(old_sdp.find("200 OK") != std::string::npos);
@@ -143,18 +144,21 @@ int main() {
   // PLAY without any media asks the registered encoder hook for an IDR.
   char setup[320];
   std::snprintf(setup, sizeof(setup),
-                "SETUP rtsp://127.0.0.1:%u/live/trackID=0 RTSP/1.0\r\nCSeq: 2\r\n"
+                "SETUP rtsp://127.0.0.1:%" PRIu32
+                "/live/trackID=0 RTSP/1.0\r\nCSeq: 2\r\n"
                 "Transport: RTP/AVP/TCP;unicast;interleaved=0-1\r\n\r\n",
-                static_cast<unsigned>(kPort));
+                static_cast<uint32_t>(kPort));
   RS_CHECK(SendAll(client, setup));
   const std::string setup_rsp = ReadResponse(client);
   RS_CHECK(setup_rsp.find("200 OK") != std::string::npos);
   const std::string session = HeaderValue(setup_rsp, "Session");
   RS_CHECK(!session.empty());
   char play[320];
-  std::snprintf(play, sizeof(play), "PLAY rtsp://127.0.0.1:%u/live/trackID=0 RTSP/1.0\r\nCSeq: 3\r\n"
-                                    "Session: %s\r\n\r\n",
-                static_cast<unsigned>(kPort), session.c_str());
+  std::snprintf(play, sizeof(play),
+                "PLAY rtsp://127.0.0.1:%" PRIu32
+                "/live/trackID=0 RTSP/1.0\r\nCSeq: 3\r\n"
+                "Session: %s\r\n\r\n",
+                static_cast<uint32_t>(kPort), session.c_str());
   RS_CHECK(SendAll(client, play));
   // The PLAY 200 is deferred until the first IDR, so only the hook is checked.
   for (uint32_t waited = 0U; waited < 1000U && g_idr_calls.load(std::memory_order_relaxed) == 0U; waited += 20U) {
@@ -163,8 +167,8 @@ int main() {
   RS_CHECK_EQ(g_idr_calls.load(std::memory_order_relaxed), 1U);
   char teardown[320];
   std::snprintf(teardown, sizeof(teardown),
-                "TEARDOWN rtsp://127.0.0.1:%u/live/trackID=0 RTSP/1.0\r\nCSeq: 4\r\nSession: %s\r\n\r\n",
-                static_cast<unsigned>(kPort), session.c_str());
+                "TEARDOWN rtsp://127.0.0.1:%" PRIu32 "/live/trackID=0 RTSP/1.0\r\nCSeq: 4\r\nSession: %s\r\n\r\n",
+                static_cast<uint32_t>(kPort), session.c_str());
   RS_CHECK(SendAll(client, teardown));
   const std::string teardown_rsp = ReadResponse(client);
   RS_CHECK(teardown_rsp.find("200 OK") != std::string::npos);

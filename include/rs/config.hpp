@@ -1,5 +1,11 @@
 // Compile-time limits for the newosp-based RTSP server (v1).
 // All capacities are fixed; no dynamic growth on the media path.
+//
+// The log level lives in newosp (osp::log::Level) and is deliberately NOT
+// redeclared here: two enumerations with opposite ordering (this file used a
+// "verbosity rank", newosp uses a "severity rank") invite silent misreads at
+// every comparison site. The header is not included here either - a public
+// header must not drag the logging backend into every translation unit.
 // SPDX-License-Identifier: MIT
 #ifndef RS_CONFIG_HPP_
 #define RS_CONFIG_HPP_
@@ -9,19 +15,19 @@
 namespace rs {
 
 // Connections
-constexpr uint32_t kMaxConnections = 16U;   // RTSP control connections, incl. not-yet-SETUP.
+constexpr uint32_t kMaxConnections = 16U;  // RTSP control connections, incl. not-yet-SETUP.
 constexpr uint32_t kMaxUriBytes = 256U;
 constexpr uint32_t kMaxHeaderCount = 24U;
 constexpr uint32_t kMaxHeaderBytes = 2048U;
-constexpr uint32_t kRtspRxBytes = 8192U;    // Per-connection inbound linear buffer.
-constexpr uint32_t kRtspTxBytes = 32768U;   // Per-connection outbound arena (control + TCP media).
-constexpr uint32_t kControlTxLimit = 8192U; // Control-only backpressure threshold.
+constexpr uint32_t kRtspRxBytes = 8192U;     // Per-connection inbound linear buffer.
+constexpr uint32_t kRtspTxBytes = 32768U;    // Per-connection outbound arena (control + TCP media).
+constexpr uint32_t kControlTxLimit = 8192U;  // Control-only backpressure threshold.
 
 // Media
-constexpr uint32_t kFrameSlots = 8U;              // Power of two.
-constexpr uint32_t kEmptySlotQueueDepth = 16U;    // Power of two, >= kFrameSlots.
-constexpr uint32_t kInputQueueDepth = 8U;         // Power of two, <= kFrameSlots.
-constexpr uint32_t kMaxAuBytes = 256U * 1024U;    // One access unit.
+constexpr uint32_t kFrameSlots = 8U;            // Power of two.
+constexpr uint32_t kEmptySlotQueueDepth = 16U;  // Power of two, >= kFrameSlots.
+constexpr uint32_t kInputQueueDepth = 8U;       // Power of two, <= kFrameSlots.
+constexpr uint32_t kMaxAuBytes = 256U * 1024U;  // One access unit.
 constexpr uint32_t kRtpPayloadMax = 1200U;
 // One session may emit at most this many media bytes (and packets) per loop
 // pass. 32 KiB per 40 ms pass covers a 4 Mbit/s stream with headroom while
@@ -43,14 +49,14 @@ constexpr uint32_t kSendStallTimeoutMs = 2000U;
 constexpr uint32_t kMaintenancePeriodMs = 100U;
 constexpr uint32_t kSourceLossTimeoutMs = 5000U;
 constexpr uint32_t kStatsLogPeriodMs = 5000U;
-constexpr uint32_t kRtcpSrPeriodMs = 5000U;   // RFC 3550 average.
-constexpr uint32_t kRtcpSrJitterMs = 2500U;   // +/- 50% to avoid synchronised SR.
-constexpr uint32_t kMaxRtcpBytes = 128U;      // SR + SDES(CNAME) budget.
+constexpr uint32_t kRtcpSrPeriodMs = 5000U;  // RFC 3550 average.
+constexpr uint32_t kRtcpSrJitterMs = 2500U;  // +/- 50% to avoid synchronised SR.
+constexpr uint32_t kMaxRtcpBytes = 128U;     // SR + SDES(CNAME) budget.
 
 // Network
 constexpr uint16_t kDefaultRtspPort = 8554U;  // Unprivileged default for tests.
 constexpr uint32_t kMaxPortNumber = 0xFFFFU;
-constexpr uint16_t kDefaultRtcpPortBase = 0U; // 0 = ephemeral bind.
+constexpr uint16_t kDefaultRtcpPortBase = 0U;  // 0 = ephemeral bind.
 constexpr uint32_t kListenBacklog = 32U;
 constexpr uint32_t kMaxPollEvents = 64U;
 
@@ -78,7 +84,7 @@ constexpr uint32_t kUdpIpTos = 0xB8U;
 
 // RTP wire constants (RFC 3550 / RFC 6184 / RFC 7798).
 constexpr uint8_t kRtpPayloadType = 96U;
-constexpr uint8_t kRtpVersionByte = 0x80U;   // V=2, P=0, X=0, CC=0.
+constexpr uint8_t kRtpVersionByte = 0x80U;  // V=2, P=0, X=0, CC=0.
 constexpr uint8_t kRtpMarkerMask = 0x80U;
 constexpr uint32_t kRtpHeaderBytes = 12U;
 constexpr uint32_t kInterleavedHeaderBytes = 4U;
@@ -94,9 +100,13 @@ constexpr uint32_t kMsPerSec = 1000U;
 // Per-client egress shaping and build identity.
 constexpr uint32_t kClientEgressRateBps = 8U * kMsPerSec * kMsPerSec;
 constexpr uint32_t kClientEgressBurstBytes = 32U * 1024U;
-constexpr const char* kVersion = "0.1";
-
-enum class LogLevel : uint8_t { kError = 0, kWarn, kInfo, kDebug };
+// RS_VERSION comes from CMake project(VERSION); the fallback keeps this
+// header self-contained for a compiler that does not define it.
+#if defined(RS_VERSION)
+constexpr const char* kVersion = RS_VERSION;
+#else
+constexpr const char* kVersion = "0.0.0-dev";
+#endif
 
 enum class TransportKind : uint8_t { kNone = 0, kUdp, kTcp };
 
@@ -104,7 +114,6 @@ enum class TransportKind : uint8_t { kNone = 0, kUdp, kTcp };
 // alignas() remains safe if a target uses a smaller line.
 constexpr uint32_t kCacheLineBytes = 64U;
 static_assert((kCacheLineBytes & (kCacheLineBytes - 1U)) == 0U, "cache line must be a power of two");
-
 
 static_assert((kFrameSlots & (kFrameSlots - 1U)) == 0U, "kFrameSlots must be a power of two");
 static_assert((kEmptySlotQueueDepth & (kEmptySlotQueueDepth - 1U)) == 0U, "empty slot queue must be a power of two");

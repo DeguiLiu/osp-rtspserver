@@ -1,6 +1,7 @@
 // Unit tests for interleaved framing, UDP loopback send and the token bucket.
 // SPDX-License-Identifier: MIT
 #include "check.hpp"
+
 #include "rs/rtp_transport.hpp"
 #include "rs/tx_stream.hpp"
 
@@ -11,7 +12,6 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
-
 #include <vector>
 
 namespace {
@@ -65,8 +65,7 @@ int TestInterleavedLayout() {
   // Empty segments are skipped but still allowed: header + prefix, no payload.
   const RtpPacket prefix_only{header, sizeof(header), prefix, sizeof(prefix), nullptr, 0U, false};
   std::byte prefix_out[64] = {};
-  auto prefix_only_written = WriteInterleaved(osp::writable_byte_span{prefix_out, sizeof(prefix_out)}, 0U,
-                                              prefix_only);
+  auto prefix_only_written = WriteInterleaved(osp::writable_byte_span{prefix_out, sizeof(prefix_out)}, 0U, prefix_only);
   RS_CHECK(prefix_only_written.has_value());
   RS_CHECK_EQ(prefix_only_written.value(), 4U + 12U + 2U);
   RS_CHECK_EQ(AsBytes(prefix_out)[3], 14U);
@@ -130,8 +129,7 @@ int TestInterleavedBoundaries() {
 
   // A prefix that pushes the frame one byte past 65535 must be rejected.
   const uint8_t prefix[2] = {0x7CU, 0x85U};
-  RtpPacket fu_over{header, sizeof(header), prefix, sizeof(prefix), payload.data(),
-                    65534U - sizeof(header), true};
+  RtpPacket fu_over{header, sizeof(header), prefix, sizeof(prefix), payload.data(), 65534U - sizeof(header), true};
   auto fu_over_result = WriteInterleaved(osp::writable_byte_span{out.data(), out.size()}, 0U, fu_over);
   RS_CHECK(!fu_over_result.has_value());
   RS_CHECK(fu_over_result.get_error() == TransportError::kTooLarge);
@@ -153,8 +151,7 @@ int TestInterleavedBoundaries() {
   RS_CHECK(!raw_zero.has_value());
   auto raw_channel = WriteInterleavedRaw(osp::writable_byte_span{out.data(), out.size()}, 7U, payload.data(), 8U);
   RS_CHECK(raw_channel.has_value());
-  auto raw_bad_channel =
-      WriteInterleavedRaw(osp::writable_byte_span{out.data(), out.size()}, 200U, payload.data(), 8U);
+  auto raw_bad_channel = WriteInterleavedRaw(osp::writable_byte_span{out.data(), out.size()}, 200U, payload.data(), 8U);
   RS_CHECK(!raw_bad_channel.has_value());
   return 0;
 }
@@ -225,14 +222,14 @@ int TestTokenBucketNoOverIssue() {
 int TestUdpLoopback() {
   const int fd = ::socket(AF_INET, SOCK_DGRAM, 0);
   RS_CHECK(fd >= 0);
-  struct sockaddr_in local {};
+  struct sockaddr_in local{};
   local.sin_family = AF_INET;
   local.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
   local.sin_port = 0;
   RS_CHECK_EQ(::bind(fd, reinterpret_cast<const struct sockaddr*>(&local), sizeof(local)), 0);
   socklen_t local_len = static_cast<socklen_t>(sizeof(local));
   RS_CHECK_EQ(::getsockname(fd, reinterpret_cast<struct sockaddr*>(&local), &local_len), 0);
-  struct timeval timeout {};
+  struct timeval timeout{};
   timeout.tv_sec = 2;
   timeout.tv_usec = 0;
   RS_CHECK_EQ(::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)), 0);

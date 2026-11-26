@@ -4,12 +4,11 @@
 #ifndef RS_RTCP_ENDPOINT_HPP_
 #define RS_RTCP_ENDPOINT_HPP_
 
+#include "osp/span.hpp"
 #include "rs/config.hpp"
 #include "rs/rtcp.hpp"
 #include "rs/rtp_transport.hpp"
 #include "rs/tx_stream.hpp"
-
-#include "osp/span.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -33,8 +32,8 @@ class RtcpEndpoint final {
   // Returns true when the peer sent BYE.
   [[nodiscard]] bool OnDatagram(osp::byte_span payload, uint32_t& rr_count, uint32_t& bye_count,
                                 uint32_t& bad_count) noexcept {
-    auto summary = ParseCompound(reinterpret_cast<const uint8_t*>(payload.data()),
-                                 static_cast<uint32_t>(payload.size()));
+    auto summary =
+        ParseCompound(reinterpret_cast<const uint8_t*>(payload.data()), static_cast<uint32_t>(payload.size()));
     if (!summary.has_value()) {
       ++bad_count;
       return false;
@@ -44,9 +43,9 @@ class RtcpEndpoint final {
     return summary.value().byes > 0U;
   }
 
-  void MaybeSend(uint64_t now_ns, uint32_t ssrc, const char* advertise_ip, uint32_t rtp_ts,
-                 uint32_t packet_count, TransportKind transport, uint8_t rtcp_channel, TxStream& tx,
-                 UdpRtpTransport& udp, uint32_t& sr_count, uint32_t& bad_count) noexcept {
+  void MaybeSend(uint64_t now_ns, uint32_t ssrc, const char* advertise_ip, uint32_t rtp_ts, uint32_t packet_count,
+                 TransportKind transport, uint8_t rtcp_channel, TxStream& tx, UdpRtpTransport& udp, uint32_t& sr_count,
+                 uint32_t& bad_count) noexcept {
     if (next_sr_ns_ == 0U || now_ns < next_sr_ns_ ||
         (transport != TransportKind::kUdp && transport != TransportKind::kTcp)) {
       return;

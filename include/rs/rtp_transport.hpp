@@ -3,22 +3,16 @@
 #ifndef RS_RTP_TRANSPORT_HPP_
 #define RS_RTP_TRANSPORT_HPP_
 
-#include "rs/h264_packetizer.hpp"
-
 #include "osp/socket.hpp"
 #include "osp/span.hpp"
 #include "osp/vocabulary.hpp"
+#include "rs/h264_packetizer.hpp"
 
 #include <cstdint>
 
 namespace rs {
 
-enum class TransportError : uint8_t {
-  kNotConfigured = 0,
-  kTooLarge,
-  kFatal,
-  kWouldBlock
-};
+enum class TransportError : uint8_t { kNotConfigured = 0, kTooLarge, kFatal, kWouldBlock };
 
 enum class SendStatus : uint8_t { kSent = 0, kWouldBlock };
 
@@ -36,8 +30,8 @@ class UdpRtpTransport {
   UdpRtpTransport& operator=(UdpRtpTransport&&) noexcept = default;
 
   // dest_ipv4 is host byte order. Local ports are written back on success.
-  [[nodiscard]] bool Open(uint32_t dest_ipv4, uint16_t dest_rtp_port, uint16_t dest_rtcp_port,
-                          uint16_t& local_rtp_port, uint16_t& local_rtcp_port) noexcept;
+  [[nodiscard]] bool Open(uint32_t dest_ipv4, uint16_t dest_rtp_port, uint16_t dest_rtcp_port, uint16_t& local_rtp_port,
+                          uint16_t& local_rtcp_port) noexcept;
   void Close() noexcept;
   bool IsOpen() const noexcept { return rtp_.Fd() >= 0; }
 
@@ -54,10 +48,9 @@ class UdpRtpTransport {
 // Writes '$' | channel | 16-bit length | payload into out.
 // Returns bytes written; kTooLarge when the packet exceeds out or 65535.
 [[nodiscard]] osp::expected<uint32_t, TransportError> WriteInterleaved(osp::writable_byte_span out, uint8_t channel,
-                                                                     const RtpPacket& pkt) noexcept;
-[[nodiscard]] osp::expected<uint32_t, TransportError> WriteInterleavedRaw(osp::writable_byte_span out,
-                                                                        uint8_t channel, const uint8_t* data,
-                                                                        uint32_t len) noexcept;
+                                                                       const RtpPacket& pkt) noexcept;
+[[nodiscard]] osp::expected<uint32_t, TransportError> WriteInterleavedRaw(osp::writable_byte_span out, uint8_t channel,
+                                                                          const uint8_t* data, uint32_t len) noexcept;
 
 // Shared egress shaper. Bytes are admitted in whole packets; a rejected
 // packet is dropped (never split) and the caller counts it.

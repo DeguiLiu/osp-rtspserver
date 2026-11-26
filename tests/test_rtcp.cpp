@@ -31,8 +31,8 @@ uint32_t Read32(const uint8_t* p) {
 
 // Builds an RR with `rc` report blocks; the first block carries the values
 // the parser must return.
-uint32_t MakeRr(uint8_t* p, uint8_t rc, uint32_t block_ssrc, uint8_t fraction, uint32_t lost24,
-                uint32_t ext_seq, uint32_t jitter, uint32_t last_sr, uint32_t delay) {
+uint32_t MakeRr(uint8_t* p, uint8_t rc, uint32_t block_ssrc, uint8_t fraction, uint32_t lost24, uint32_t ext_seq,
+                uint32_t jitter, uint32_t last_sr, uint32_t delay) {
   const uint32_t bytes = 8U + static_cast<uint32_t>(rc) * 24U;
   p[0] = static_cast<uint8_t>(0x80U | rc);
   p[1] = 201U;
@@ -153,8 +153,8 @@ int main() {
   // Compound SR (RC=0) + RR: the SR is skipped.
   {
     uint8_t compound[128] = {};
-    const uint32_t sr_bytes = rs::BuildSenderReport(Span(compound, sizeof(compound)), 0x01020304U, 1000ULL, 50U,
-                                                    1U, 10U).value();
+    const uint32_t sr_bytes =
+        rs::BuildSenderReport(Span(compound, sizeof(compound)), 0x01020304U, 1000ULL, 50U, 1U, 10U).value();
     const uint32_t rr_bytes = MakeRr(compound + sr_bytes, 1U, 0xCAFEBABEU, 3U, 4U, 5U, 6U, 7U, 8U);
     const auto r = rs::ParseReceiverReport(compound, sr_bytes + rr_bytes);
     RS_CHECK(r.has_value());
@@ -227,8 +227,7 @@ int main() {
   // SR + SDES(CNAME): exact compound bytes, "abc" padded to 32-bit alignment.
   {
     uint8_t buf[128] = {};
-    const auto r = rs::BuildSenderReportWithSdes(Span(buf, sizeof(buf)), 0x11223344U, "abc", 0ULL, 90000U, 100U,
-                                                 5000U);
+    const auto r = rs::BuildSenderReportWithSdes(Span(buf, sizeof(buf)), 0x11223344U, "abc", 0ULL, 90000U, 100U, 5000U);
     RS_CHECK(r.has_value());
     RS_CHECK_EQ(r.value(), 44U);
     // SR header: V=2, PT=200, length=6, SSRC, then sender info.
@@ -266,8 +265,7 @@ int main() {
       long_name[i] = 'x';
     }
     uint8_t buf[512] = {};
-    const auto r =
-        rs::BuildSenderReportWithSdes(Span(buf, sizeof(buf)), 1U, long_name, 0ULL, 0U, 0U, 0U);
+    const auto r = rs::BuildSenderReportWithSdes(Span(buf, sizeof(buf)), 1U, long_name, 0ULL, 0U, 0U, 0U);
     RS_CHECK(r.has_value());
     RS_CHECK_EQ(r.value(), 296U);  // 28 SR + 4 SDES header + 264 padded chunk/padding.
     RS_CHECK_EQ(buf[37], static_cast<uint8_t>(255U));
@@ -298,9 +296,8 @@ int main() {
   uint8_t mixed[256] = {};
   uint32_t mixed_bytes = 0U;
   {
-    mixed_bytes = rs::BuildSenderReportWithSdes(Span(mixed, sizeof(mixed)), 0x01020304U, "cname", 0ULL, 900U, 1U,
-                                                10U)
-                      .value();
+    mixed_bytes =
+        rs::BuildSenderReportWithSdes(Span(mixed, sizeof(mixed)), 0x01020304U, "cname", 0ULL, 900U, 1U, 10U).value();
     mixed_bytes += MakeRr(mixed + mixed_bytes, 1U, 0xDEADBEEFU, 25U, 0xFFFFFEU, 9U, 300U, 0x4567U, 0x10U);
     mixed_bytes += MakeBye(mixed + mixed_bytes, 1U);
     const auto summary = rs::ParseCompound(mixed, mixed_bytes);

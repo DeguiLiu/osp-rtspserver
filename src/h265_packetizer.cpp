@@ -76,7 +76,8 @@ void WriteRtpHeader(HevcCursor& cursor, uint32_t ssrc, bool marker) noexcept {
 bool ParseNalHeader(const uint8_t* data, uint32_t len, uint8_t& type) noexcept {
   bool valid = false;
   if ((nullptr != data) && (len >= kHevcNalHeaderBytes)) {
-    const uint8_t layer_id = static_cast<uint8_t>(((data[0] & kHevcLayerHighMask) << kHevcLayerHighShift) | (data[1] >> kHevcLayerLowShift));
+    const uint8_t layer_id =
+        static_cast<uint8_t>(((data[0] & kHevcLayerHighMask) << kHevcLayerHighShift) | (data[1] >> kHevcLayerLowShift));
     const uint8_t tid_plus1 = static_cast<uint8_t>(data[1] & kHevcTidMask);
     type = static_cast<uint8_t>((data[0] >> kHevcTypeShift) & kHevcTypeMask);
     valid = (0U == (data[0] & kHevcForbiddenMask)) && (0U != tid_plus1) && (0U == layer_id) && (type <= kMaxNalType);
@@ -151,8 +152,8 @@ osp::expected<RtpPacket, PacketizeError> EmitFu(const uint8_t* au, uint32_t next
     cursor.fu_header[0] = static_cast<uint8_t>((static_cast<uint8_t>(nal.data[0]) & kHevcFuKeepMask) |
                                                static_cast<uint8_t>(kFuType << kHevcTypeShift));
     cursor.fu_header[1] = static_cast<uint8_t>(nal.data[1]);
-    cursor.fu_header[2] = static_cast<uint8_t>((first ? kFuStartMask : 0x00U) |
-                                               (last_fragment ? kFuEndMask : 0x00U) | type);
+    cursor.fu_header[2] =
+        static_cast<uint8_t>((first ? kFuStartMask : 0x00U) | (last_fragment ? kFuEndMask : 0x00U) | type);
     const bool last = last_fragment && !HasNextNal(au, cursor.au_len, next_offset);
     WriteRtpHeader(cursor, ssrc, last);
     RtpPacket packet;
@@ -191,8 +192,8 @@ osp::expected<RtpPacket, PacketizeError> EmitNal(const uint8_t* au, HevcCursor& 
     cursor.in_au = false;
     result = osp::expected<RtpPacket, PacketizeError>::error(
         OnlyZeros(au, cursor.nal_offset, cursor.au_len) ? PacketizeError::kEndOfAu : PacketizeError::kBadNal);
-  } else if (!ParseNalHeader(reinterpret_cast<const uint8_t*>(nal.data.data()),
-                             static_cast<uint32_t>(nal.data.size()), type)) {
+  } else if (!ParseNalHeader(reinterpret_cast<const uint8_t*>(nal.data.data()), static_cast<uint32_t>(nal.data.size()),
+                             type)) {
     cursor.in_au = false;
   } else if ((0U == cursor.frag_offset) && (nal.data.size() <= kRtpPayloadMax)) {
     result = EmitSingle(au, next_offset, nal, cursor, ssrc);
@@ -272,7 +273,7 @@ osp::expected<RtpPacket, PacketizeError> H265Packetizer::Next(const uint8_t* au,
       const bool too_large = (nullptr != au) && (cursor.au_len <= au_len);
       cursor.in_au = false;
       result = osp::expected<RtpPacket, PacketizeError>::error(too_large ? PacketizeError::kTooLarge
-                                                                        : PacketizeError::kBadNal);
+                                                                         : PacketizeError::kBadNal);
     } else {
       result = EmitNal(au, cursor, ssrc);
     }

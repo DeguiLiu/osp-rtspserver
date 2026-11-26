@@ -5,6 +5,7 @@
 #ifndef RS_MEDIA_SENDER_HPP_
 #define RS_MEDIA_SENDER_HPP_
 
+#include "osp/vocabulary.hpp"
 #include "rs/codec.hpp"
 #include "rs/config.hpp"
 #include "rs/frame_ingress.hpp"
@@ -12,9 +13,8 @@
 #include "rs/h265_packetizer.hpp"
 #include "rs/rtp_transport.hpp"
 
-#include "osp/vocabulary.hpp"
-
 #include <cstdint>
+
 #include <variant>
 
 namespace rs {

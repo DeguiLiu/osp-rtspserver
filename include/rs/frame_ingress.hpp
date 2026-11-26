@@ -5,22 +5,18 @@
 #ifndef RS_FRAME_INGRESS_HPP_
 #define RS_FRAME_INGRESS_HPP_
 
-#include "rs/config.hpp"
-
 #include "osp/spsc_ringbuffer.hpp"
 #include "osp/vocabulary.hpp"
+#include "rs/config.hpp"
 
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
 
+#include <atomic>
+
 namespace rs {
 
-enum FrameFlags : uint16_t {
-  kFrameIdr = 0x0001U,
-  kFrameHasParams = 0x0002U,
-  kFrameParamChanged = 0x0004U
-};
+enum FrameFlags : uint16_t { kFrameIdr = 0x0001U, kFrameHasParams = 0x0002U, kFrameParamChanged = 0x0004U };
 
 struct FrameDesc {
   uint64_t pts_ns = 0U;
@@ -54,12 +50,7 @@ struct FrameIngressStats {
   uint32_t loop_orphan_drops = 0U;
 };
 
-enum class IngressError : uint8_t {
-  kFull = 0,
-  kStopped,
-  kInvalidAu,
-  kNoSlot
-};
+enum class IngressError : uint8_t { kFull = 0, kStopped, kInvalidAu, kNoSlot };
 
 class FrameIngress {
  public:
@@ -88,14 +79,10 @@ class FrameIngress {
   [[nodiscard]] uint32_t ProducerOrphanDrops() const noexcept {
     return producer_orphan_drops_.load(std::memory_order_relaxed);
   }
-  [[nodiscard]] uint32_t LoopOrphanDrops() const noexcept {
-    return loop_orphan_drops_.load(std::memory_order_relaxed);
-  }
+  [[nodiscard]] uint32_t LoopOrphanDrops() const noexcept { return loop_orphan_drops_.load(std::memory_order_relaxed); }
   [[nodiscard]] FrameIngressStats Stats() const noexcept;
   void SetFaultDrop(uint32_t count) noexcept { fault_drop_.store(count, std::memory_order_release); }
-  [[nodiscard]] uint32_t FaultDropRemaining() const noexcept {
-    return fault_drop_.load(std::memory_order_acquire);
-  }
+  [[nodiscard]] uint32_t FaultDropRemaining() const noexcept { return fault_drop_.load(std::memory_order_acquire); }
   [[nodiscard]] bool ConsumeFaultDrop() noexcept;
 
   void Stop() noexcept { stopped_.store(true, std::memory_order_release); }

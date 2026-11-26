@@ -54,8 +54,8 @@ class Client {
   bool IsOpen() const noexcept { return fd_ >= 0; }
   int Fd() const noexcept { return fd_; }
 
-  bool Request(const std::string& method, const std::string& uri,
-               const std::vector<std::string>& headers, const std::string& body, std::string& err);
+  bool Request(const std::string& method, const std::string& uri, const std::vector<std::string>& headers,
+               const std::string& body, std::string& err);
   bool ReadResponse(Response& out, int timeout_ms, std::string& err);
   bool ReadInterleaved(MediaFrame& out, int timeout_ms, std::string& err);
   bool HasPendingMedia() const noexcept { return !media_.empty(); }
@@ -184,8 +184,8 @@ bool CompareNals(const std::vector<NalUnit>& expected, const std::vector<NalUnit
 
 // fork/exec with bounded wait. Returns false only when the child could not be
 // started or reaped; exit_code is valid otherwise.
-bool RunProcess(const std::vector<std::string>& argv, int timeout_ms, std::string& stdout_log,
-                std::string& stderr_log, int& exit_code);
+bool RunProcess(const std::vector<std::string>& argv, int timeout_ms, std::string& stdout_log, std::string& stderr_log,
+                int& exit_code);
 
 std::string MakeUri(const std::string& host, uint16_t port, const std::string& path);
 

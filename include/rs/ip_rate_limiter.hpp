@@ -12,12 +12,8 @@ namespace rs {
 
 class IpRateLimiter final {
  public:
-  [[nodiscard]] bool AllowAccept(uint32_t ip, uint64_t now_ns) noexcept {
-    return Allow(ip, now_ns, true);
-  }
-  [[nodiscard]] bool AllowRequest(uint32_t ip, uint64_t now_ns) noexcept {
-    return Allow(ip, now_ns, false);
-  }
+  [[nodiscard]] bool AllowAccept(uint32_t ip, uint64_t now_ns) noexcept { return Allow(ip, now_ns, true); }
+  [[nodiscard]] bool AllowRequest(uint32_t ip, uint64_t now_ns) noexcept { return Allow(ip, now_ns, false); }
 
  private:
   struct Entry {
@@ -56,12 +52,10 @@ class IpRateLimiter final {
         entries_[i].used = true;
         return entries_[i];
       }
-      const uint64_t age = (entries_[i].accept_last_ns > entries_[i].request_last_ns)
-                               ? entries_[i].accept_last_ns
-                               : entries_[i].request_last_ns;
-      const uint64_t oldest_age = (oldest->accept_last_ns > oldest->request_last_ns)
-                                      ? oldest->accept_last_ns
-                                      : oldest->request_last_ns;
+      const uint64_t age = (entries_[i].accept_last_ns > entries_[i].request_last_ns) ? entries_[i].accept_last_ns
+                                                                                      : entries_[i].request_last_ns;
+      const uint64_t oldest_age =
+          (oldest->accept_last_ns > oldest->request_last_ns) ? oldest->accept_last_ns : oldest->request_last_ns;
       if (age < oldest_age) {
         oldest = &entries_[i];
       }

@@ -5,25 +5,15 @@
 #ifndef RS_RTSP_PARSER_HPP_
 #define RS_RTSP_PARSER_HPP_
 
-#include "rs/config.hpp"
-
 #include "osp/span.hpp"
 #include "osp/vocabulary.hpp"
+#include "rs/config.hpp"
 
 #include <cstdint>
 
 namespace rs {
 
-enum class Method : uint8_t {
-  kOptions = 0,
-  kDescribe,
-  kSetup,
-  kPlay,
-  kPause,
-  kTeardown,
-  kGetParameter,
-  kUnknown
-};
+enum class Method : uint8_t { kOptions = 0, kDescribe, kSetup, kPlay, kPause, kTeardown, kGetParameter, kUnknown };
 
 struct HeaderView {
   osp::byte_span name;
@@ -52,9 +42,9 @@ struct ParserCallbacks {
 };
 
 enum class ParseError : uint8_t {
-  kOverflow = 0,      // Buffer full without a complete message.
-  kMalformed,         // Start line / header syntax error.
-  kBadInterleaved,    // '$' frame length exceeds the buffer budget.
+  kOverflow = 0,    // Buffer full without a complete message.
+  kMalformed,       // Start line / header syntax error.
+  kBadInterleaved,  // '$' frame length exceeds the buffer budget.
   kTooManyHeaders
 };
 

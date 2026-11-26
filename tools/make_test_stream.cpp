@@ -4,6 +4,7 @@
 // a leading "# codec=H265" line; the H.264 output is byte-identical to the
 // phase-1 generator so existing regression hashes stay valid.
 // SPDX-License-Identifier: MIT
+#include <cinttypes>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -41,8 +42,8 @@ constexpr uint8_t kHevcSps[] = {0x42, 0x01, 0x01, 0x01, 0x60, 0x00, 0x00, 0x03, 
 constexpr uint8_t kHevcPps[] = {0x44, 0x01, 0xC1, 0x72, 0xB4, 0x62, 0x40};
 
 // HEVC NAL headers (F=0, layer 0, temporal_id_plus1=1).
-constexpr uint8_t kHevcIdrHeader = 0x26U;   // IDR_W_RADL (19)
-constexpr uint8_t kHevcTrailHeader = 0x02U; // TRAIL_R (1)
+constexpr uint8_t kHevcIdrHeader = 0x26U;    // IDR_W_RADL (19)
+constexpr uint8_t kHevcTrailHeader = 0x02U;  // TRAIL_R (1)
 
 class Rng {
  public:
@@ -115,8 +116,7 @@ bool ParseU32(const char* text, uint32_t& out) noexcept {
 }
 
 void Usage(const char* argv0) {
-  std::fprintf(stderr, "usage: %s <out.h264|out.h265> [--aus N] [--gop G] [--fps F] [--codec h264|h265]\n",
-               argv0);
+  std::fprintf(stderr, "usage: %s <out.h264|out.h265> [--aus N] [--gop G] [--fps F] [--codec h264|h265]\n", argv0);
 }
 
 }  // namespace
@@ -215,8 +215,8 @@ int main(int argc, char** argv) {
     }
     const uint64_t hash = Fnv1a64(au.data(), au.size());
     write_ok = (std::fwrite(au.data(), 1U, au.size(), stream_file) == au.size()) &&
-               (std::fprintf(expect_file, "%u %u %zu %016llx\n", au_index, is_idr ? 1U : 0U, au.size(),
-                             static_cast<unsigned long long>(hash)) > 0);
+               (std::fprintf(expect_file, "%" PRIu32 " %" PRIu32 " %zu %016" PRIx64 "\n", au_index, is_idr ? 1U : 0U,
+                             au.size(), static_cast<uint64_t>(hash)) > 0);
     total_bytes += au.size();
   }
   const bool close_ok = (0 == std::fclose(stream_file)) && (0 == std::fclose(expect_file));
@@ -224,9 +224,8 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "make_test_stream: write failed\n");
     return 2;
   }
-  std::printf("make_test_stream: %s, %u AUs, %llu bytes, gop=%u fps=%u (~%.1f s)\n",
-              (Codec::kH265 == codec) ? "H265" : "H264", aus,
-              static_cast<unsigned long long>(total_bytes), gop, fps,
+  std::printf("make_test_stream: %s, %" PRIu32 " AUs, %" PRIu64 " bytes, gop=%" PRIu32 " fps=%" PRIu32 " (~%.1f s)\n",
+              (Codec::kH265 == codec) ? "H265" : "H264", aus, static_cast<uint64_t>(total_bytes), gop, fps,
               static_cast<double>(aus) / static_cast<double>(fps));
   return 0;
 }

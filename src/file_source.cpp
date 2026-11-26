@@ -36,7 +36,9 @@ bool HevcHeaderValid(uint8_t b0, uint8_t b1) noexcept {
   return (b0 & 0x80U) == 0U && layer == 0U && (b1 & 0x07U) != 0U;
 }
 
-uint8_t HevcType(uint8_t b0) noexcept { return static_cast<uint8_t>((b0 >> 1U) & 0x3FU); }
+uint8_t HevcType(uint8_t b0) noexcept {
+  return static_cast<uint8_t>((b0 >> 1U) & 0x3FU);
+}
 
 uint32_t FindStartCodePos(const uint8_t* p, uint32_t len, uint32_t from) noexcept {
   for (uint32_t i = from; i + 3U <= len; ++i) {
@@ -343,11 +345,10 @@ bool FileSource::ReadNextAu(uint32_t& out_len) noexcept {
     const uint32_t available = au_len_ - au_off_;
     if (available > 4U) {
       const uint32_t from = au_off_ + 4U;
-      uint32_t boundary = h265 ? FindHevcNalStart(au_buf_, au_len_, from, 35U)
-                               : FindNalStart(au_buf_, au_len_, from, 9U);
+      uint32_t boundary =
+          h265 ? FindHevcNalStart(au_buf_, au_len_, from, 35U) : FindNalStart(au_buf_, au_len_, from, 9U);
       if (boundary == kNotFound && (au_eof_ || au_len_ >= kSourceBufBytes)) {
-        boundary = h265 ? FindHevcParamStart(au_buf_, au_len_, from)
-                        : FindNalStart(au_buf_, au_len_, from, 7U);
+        boundary = h265 ? FindHevcParamStart(au_buf_, au_len_, from) : FindNalStart(au_buf_, au_len_, from, 7U);
       }
       if (boundary != kNotFound) {
         if (au_resync_) {

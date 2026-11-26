@@ -55,9 +55,9 @@ int TestLifecycle() {
 
   // Loop reference + one client reference.
   RS_CHECK(ing.AddRef(popped));
-  ing.Release(popped);  // Client done.
+  ing.Release(popped);             // Client done.
   RS_CHECK(ing.Validate(popped));  // Loop reference still alive.
-  ing.Release(popped);  // Loop reference: slot returns to the pool.
+  ing.Release(popped);             // Loop reference: slot returns to the pool.
   RS_CHECK(!ing.Validate(popped));
   RS_CHECK(ing.Data(popped) == nullptr);
 
@@ -107,8 +107,8 @@ int TestAbortKeepsLocalSlot() {
 
   auto b = ing.Acquire(256U);
   RS_CHECK(b.has_value());
-  RS_CHECK_EQ(b.value().desc.slot, slot);          // Local spare reused first.
-  RS_CHECK(b.value().desc.generation != gen);      // Never reuse a generation.
+  RS_CHECK_EQ(b.value().desc.slot, slot);      // Local spare reused first.
+  RS_CHECK(b.value().desc.generation != gen);  // Never reuse a generation.
   FrameIngress::Writer w = b.value();
   w.desc.pts_ns = 1U;
   std::memset(w.au, 1, 8U);
@@ -250,14 +250,22 @@ int TestProducerSlotHandoff() {
 }  // namespace
 
 int main() {
-  if (TestLifecycle() != 0) return 1;
-  if (TestGenerationReuse() != 0) return 1;
-  if (TestAbortKeepsLocalSlot() != 0) return 1;
-  if (TestPoolExhaustion() != 0) return 1;
-  if (TestPtsRegressionRejected() != 0) return 1;
-  if (TestInvalidLengthAndStopped() != 0) return 1;
-  if (TestStats() != 0) return 1;
-  if (TestProducerSlotHandoff() != 0) return 1;
+  if (TestLifecycle() != 0)
+    return 1;
+  if (TestGenerationReuse() != 0)
+    return 1;
+  if (TestAbortKeepsLocalSlot() != 0)
+    return 1;
+  if (TestPoolExhaustion() != 0)
+    return 1;
+  if (TestPtsRegressionRejected() != 0)
+    return 1;
+  if (TestInvalidLengthAndStopped() != 0)
+    return 1;
+  if (TestStats() != 0)
+    return 1;
+  if (TestProducerSlotHandoff() != 0)
+    return 1;
   std::printf("test_frame_ingress: all checks passed\n");
   return 0;
 }
