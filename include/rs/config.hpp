@@ -12,10 +12,14 @@
 
 #include <cstdint>
 
+#ifndef RS_MAX_CONNECTIONS
+#define RS_MAX_CONNECTIONS 16
+#endif
+
 namespace rs {
 
 // Connections
-constexpr uint32_t kMaxConnections = 16U;  // RTSP control connections, incl. not-yet-SETUP.
+constexpr uint32_t kMaxConnections = RS_MAX_CONNECTIONS;  // Includes not-yet-SETUP connections.
 constexpr uint32_t kMaxUriBytes = 256U;
 constexpr uint32_t kMaxHeaderCount = 24U;
 constexpr uint32_t kMaxHeaderBytes = 2048U;
@@ -131,7 +135,7 @@ static_assert(kMediaTxLimitBytes >= (kRtpPayloadMax + kRtpHeaderBytes + kInterle
               "media transmit limit must fit one interleaved RTP packet");
 static_assert(kMediaTxLimitBytes >= (kMaxRtcpBytes + kInterleavedHeaderBytes),
               "media transmit limit must fit one interleaved RTCP packet");
-static_assert(kMaxConnections <= 256U, "connection slot must fit advertised tag limits");
+static_assert(kMaxConnections >= 4U && kMaxConnections <= 16U, "connection capacity must be 4..16");
 static_assert(kRtpPayloadMax <= 1200U, "keep RTP payload inside a 1280-byte MTU budget");
 static_assert(kMaxPollEvents <= 64U, "newosp IoPoller tag table holds 64 fds");
 

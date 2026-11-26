@@ -29,7 +29,7 @@ copying payloads. The media path allocates nothing at run time.
 | IDR wait for new clients and for frame-loss recovery | Implemented |
 | `SetIdrRequester()` hook, rate-limited across sessions | Implemented |
 | `UpdateTrackParams()` for runtime SPS/PPS/VPS changes | Implemented |
-| 16 fixed connection slots, per-client token bucket, slow-client isolation | Implemented |
+| Compile-time connection capacity (16 by default), per-client token bucket, slow-client isolation | Implemented |
 | Optional telnet debug shell, test-only fault injection | Optional, off by default |
 
 ## What it does not provide
@@ -47,6 +47,7 @@ copying payloads. The media path allocates nothing at run time.
 - No playback service. The file source is a test input, not a recording or replay feature.
 - No RT-Thread or MCU port. The supported targets are Linux x86-64 and ARM Linux; Windows is not verified.
 - No board-level performance guarantee. Every measurement is an x86-64 host measurement.
+- Encoded access units are limited to 256 KiB each; 1080p encoders must stay within this bound.
 
 ## Positioning
 
@@ -78,6 +79,11 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo \
 cmake --build build -j"$(nproc)"
 ctest --test-dir build --output-on-failure
 ```
+
+Use `-DRS_MAX_CONNECTIONS=4` to reduce the compile-time connection capacity.
+The supported range is 4–16, with 16 as the default. The runtime `max_clients`
+limit does not reduce allocated slots. The library and its consumers must use
+the same compile-time setting.
 
 ### Run with a file source
 

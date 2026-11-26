@@ -6,6 +6,7 @@
 // nothing is skipped silently.
 // SPDX-License-Identifier: MIT
 #include "e2e_client.hpp"
+#include "rs/config.hpp"
 
 #include <cinttypes>
 #include <cstdint>
@@ -1308,7 +1309,7 @@ void RunOneTcpClient(ClientJob& job) {
 }
 
 bool TestConcurrentClients(Ctx& ctx, std::string& err) {
-  constexpr uint32_t kClients = 8U;
+  constexpr uint32_t kClients = (rs::kMaxConnections < 8U) ? rs::kMaxConnections : 8U;
   std::vector<ClientJob> jobs(kClients);
   std::vector<std::thread> threads;
   threads.reserve(kClients);
@@ -1332,7 +1333,7 @@ bool TestConcurrentClients(Ctx& ctx, std::string& err) {
 }
 
 bool TestConnectionLimit(Ctx& ctx, std::string& err) {
-  constexpr uint32_t kMaxConnections = 16U;
+  constexpr uint32_t kMaxConnections = rs::kMaxConnections;
   std::vector<RtspSession> sessions(kMaxConnections);
   bool ok = true;
   for (uint32_t i = 0U; ok && i < kMaxConnections; ++i) {
@@ -1353,15 +1354,30 @@ bool TestConnectionLimit(Ctx& ctx, std::string& err) {
     const bool got_response = sent && overflow.ReadResponse(options, 2000, read_err);
     if (connected == false) {
       ok = false;
-      err = "17th connection could not be created: " + err;
+      err = "overflow connection could not be created: " + err;
     } else if (got_response) {
-      err = "17th connection received RTSP " + std::to_string(options.status) + " instead of being closed";
+      err = "overflow connection received RTSP " + std::to_string(options.status) + " instead of being closed";
       ok = false;
     } else if (overflow.PeerClosed() == false) {
-      err = "17th connection was not closed within 2 s: " + read_err;
+      err = "overflow connection was not closed within 2 s: " + read_err;
       ok = false;
     } else {
       ok = true;
+    }
+  }
+  if (ok) {
+    sessions[0].client.Close();
+    ok = false;
+    for (uint32_t attempt = 0U; !ok && attempt < 10U; ++attempt) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      rse2e::Client replacement;
+      rse2e::Response options;
+      ok = replacement.Connect("127.0.0.1", ctx.port, static_cast<int>(kConnectTimeoutMs), err) &&
+           replacement.Request("OPTIONS", "*", {"CSeq: 1"}, "", err) &&
+           replacement.ReadResponse(options, 1000, err) && ExpectStatus(options, 200U, "OPTIONS", err);
+    }
+    if (!ok) {
+      err = "replacement connection failed: " + err;
     }
   }
   for (auto& session : sessions) {
@@ -1506,9 +1522,9 @@ int main() {
       {"tcp_interleaved_channel_2", "T-TRANS-01 T-COMM-08", StreamKind::kSynthH264, nullptr, false, false,
        RunTcpPlaybackChannel2},
       {"udp_single_client", "T-TRANS-02 T-COMM-08", StreamKind::kSynthH264, nullptr, false, false, RunUdpPlayback},
-      {"eight_concurrent_tcp_clients", "T-COMM-02 T-COMM-10", StreamKind::kSynthH264, nullptr, false, false,
+      {"concurrent_tcp_clients", "T-COMM-02 T-COMM-10", StreamKind::kSynthH264, nullptr, false, false,
        TestConcurrentClients},
-      {"connection_limit_17th", "T-LIMIT-01", StreamKind::kSynthH264, nullptr, false, false, TestConnectionLimit},
+      {"connection_limit", "T-LIMIT-01", StreamKind::kSynthH264, nullptr, false, false, TestConnectionLimit},
       {"slow_client_isolation", "T-LIMIT-02 F-02/F-05", StreamKind::kSynthH264, nullptr, false, false, TestSlowClient},
       {"error_paths", "T-RTSP-404/454/461, duplicate SETUP", StreamKind::kSynthH264, nullptr, false, false,
        TestErrorPaths},

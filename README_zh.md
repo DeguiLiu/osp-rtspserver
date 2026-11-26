@@ -27,7 +27,7 @@ H.265 视频。单 Reactor 网络线程独占全部 socket、会话与定时器�
 | 新客户端起播与丢帧恢复时等待 IDR | 已实现 |
 | `SetIdrRequester()` 编码器回调，跨会话共享限频 | 已实现 |
 | `UpdateTrackParams()` 运行期更新 SPS/PPS/VPS | 已实现 |
-| 16 个固定连接槽、每客户端令牌桶、慢客户端隔离 | 已实现 |
+| 编译期配置连接槽（默认 16）、每客户端令牌桶、慢客户端隔离 | 已实现 |
 | telnet 调试 shell、测试专用故障注入 | 可选，默认关闭 |
 
 ## 不提供什么
@@ -45,6 +45,7 @@ H.265 视频。单 Reactor 网络线程独占全部 socket、会话与定时器�
 - 不提供回放服务。文件源只是测试输入，不是录制或回放功能。
 - 不提供 RT-Thread 与 MCU 移植。支持 Linux x86-64 与 ARM Linux；Windows 尚未验证。
 - 不提供板级性能保证。所有实测数据均来自 x86-64 主机。
+- 单个编码 AU 上限为 256 KiB；1080P 编码器需确保最大 AU 满足该限制。
 
 ## 定位
 
@@ -71,6 +72,9 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo \
 cmake --build build -j"$(nproc)"
 ctest --test-dir build --output-on-failure
 ```
+
+`-DRS_MAX_CONNECTIONS=4` 可将编译期连接槽数降至 4；支持范围为 4～16，默认 16。
+运行时 `max_clients` 只能限制接入数量，不会缩减已分配的槽位。库与调用方必须使用相同的编译期配置。
 
 ### 用文件源运行
 

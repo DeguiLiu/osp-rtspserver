@@ -6,6 +6,7 @@
 ## 1. 结论
 
 - `ctest` 全量 16/16 通过，约 41 s；其中 `test_e2e` 含 12 个用例，约 26 s。
+- 4 槽与 16 槽配置各通过 16/16 项，覆盖满槽拒绝与释放后重新接入。
 - H.264/H.265 的 TCP interleaved 与 UDP 单播均可拉流；客户端重组结果与源流逐 NAL 字节一致；ffmpeg 解码 25 帧，退出码 0。
 - 16 路（8 TCP + 8 UDP、4 Mbps/路、60 s）通过，RSS 3200–4000 KB；包化缓存与 UDP 批量发送后 CPU 平均约 3.8%。
 - H.264 回归用例与 H.265 新路径均通过。
@@ -37,8 +38,8 @@ E2E 用例：
 | `tcp_interleaved_single_client` | 通过 |
 | `tcp_interleaved_channel_2` | 通过 |
 | `udp_single_client` | 通过 |
-| `eight_concurrent_tcp_clients` | 通过 |
-| `connection_limit_17th` | 通过 |
+| `concurrent_tcp_clients` | 4 槽测 4 路，16 槽测 8 路，均通过 |
+| `connection_limit` | 满槽拒绝及槽位复用通过 |
 | `slow_client_isolation` | 通过 |
 | `error_paths`（404/454/461、重复 SETUP） | 通过 |
 | `h265_tcp_playback` | 通过 |
@@ -51,6 +52,7 @@ E2E 用例：
 
 | 项 | 实测 |
 |---|---|
+| `sizeof(RtspServer)` | x86-64：4 槽 2,291,264 B；16 槽 2,817,728 B；相差 526,464 B，不含线程栈及内核缓冲 |
 | H.265 TCP/UDP 重组 | 3 个 AU 逐 NAL 字节一致；FU 5 包、单 NAL 11 包；最大 RTP 1212 B；seq gap 0 |
 | H.265 SDP | `m=video 0 RTP/AVP 96`、`H265/90000`、`sprop-vps/sps/pps`、`a=control:trackID=0` |
 | H.264 SDP | `H264/90000`、`packetization-mode=1`、`profile-level-id`、`sprop-parameter-sets` |
@@ -90,6 +92,16 @@ ASan/UBSan、TSan、aarch64+qemu 与静态分析由 CI 覆盖，本地未复跑�
 | 200 KB | 21.39 ms | 122.4 us |
 
 优化前同场景 60 s：CPU 平均 20.42%、最大 24.34%、RSS 5600 KB。4 Mbps 下 UDP 批量发送的 CPU 变化在噪声内，主要收益是减少 `sendmsg` 次数；需在更高码率和 ARM 上验证。
+
+1080P 补充测试：x86-64 loopback，H.264、1920 × 1080、25 fps、目标 4 Mbps、1 s GOP，生成的 500 帧中最大帧为 65,659 B。
+
+| 场景 | 结果 |
+|---|---|
+| 8 TCP + 8 UDP，20 s，客户端流复制 | 16/16 完成；输入丢弃、gap、队列丢弃均为 0；服务端 CPU 平均 3.30%、最大 4.22% |
+| 1 TCP + 1 UDP，8 s，客户端解码 | 两端各解码 201 帧并退出成功；均出现非单调 DTS 告警 |
+| 帧池边界 | 256 KiB AU 接收、释放通过；超出 1 B 被拒绝，4 槽和 16 槽构建均通过 |
+
+1080P 高码率、大 IDR、H.265、长稳和 ARM 实机仍待验证；帧大小受内容和编码参数影响。
 
 ## 6. 未执行与限制
 

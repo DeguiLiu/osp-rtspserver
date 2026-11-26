@@ -128,7 +128,7 @@ sequenceDiagram
 接入：
 
 - `TcpListener` 绑定 `0.0.0.0:<port>`，`SO_REUSEADDR`、非阻塞、`FD_CLOEXEC`；优先 `accept4`，基线不支持时回退 `accept + fcntl`。
-- 最多 16 个连接槽，accept 后立即分配；超过 `max_clients` 或槽满时关闭。
+- 连接槽数量由编译期配置决定，默认 16；accept 后立即分配，超过 `max_clients` 或槽满时关闭。
 - 每 IP 令牌桶：accept 8/s、突发 32；请求 128/s、突发 256。超限直接关闭。
 - 连接 tag 为 `slot | (gen << 8)`，事件回调先校验 tag，避免 fd 复用投错连接。
 - TCP 选项：发送缓冲 64 KiB、接收缓冲 32 KiB、`TCP_NOTSENT_LOWAT=16 KiB`、`TCP_USER_TIMEOUT=10 s`、keepalive 30/10/3、`TCP_NODELAY`。
@@ -230,7 +230,7 @@ stateDiagram-v2
 
 | 项 | 值 |
 |---|---:|
-| 连接槽 | 16 |
+| 连接槽 | 编译期配置，默认 16 |
 | 帧槽 | 8 × 256 KiB |
 | 输入队列 / 空槽队列 | 8 / 16 |
 | 每会话 AU 队列 | 4 |
@@ -241,9 +241,10 @@ stateDiagram-v2
 | Poller fd / Timer | 64 / 8 |
 
 - `FrameIngress`、`RtspParser`、`TxStream`、`FileSource` 按 64 B cache line 对齐；`FrameDesc` 不超过 32 B。
+- `RS_MAX_CONNECTIONS` 支持 4～16；运行时 `max_clients` 不改变对象大小。库与调用方必须使用相同的编译期配置。
 - `rs_core` 不引用 `operator new`，CI 在 aarch64 目标文件上做零堆符号审计；可选的 DebugShell 与 newosp 内部实现不在该断言内。
 - 编译期关闭异常与 RTTI，负向编译测试保证该约束不被破坏。
-- `sizeof(RtspServer)` 约 2.8 MiB，其中帧池 2 MiB；`sizeof(RtspSession)` 约 34 KiB，`sizeof(RtspParser)` 约 8 KiB。未计线程栈、内核缓冲与编码器内存。
+- 默认 16 槽时 `sizeof(RtspServer)` 约 2.8 MiB，其中帧池 2 MiB；大小随编译配置和平台变化，未计线程栈、内核缓冲、文件源与编码器内存。
 
 ## 7. 背压与故障
 

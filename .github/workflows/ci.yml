@@ -29,6 +29,7 @@ jobs:
       fail-fast: false
       matrix:
         build_type: [ Debug, RelWithDebInfo ]
+        connections: [ 4, 16 ]
 
     steps:
       - uses: actions/checkout@v5
@@ -50,6 +51,7 @@ jobs:
         run: |
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DRS_MAX_CONNECTIONS=${{ matrix.connections }} \
             -DNEWOSP_DIR="${{ github.workspace }}/newosp" \
             -DRS_BUILD_E2E=ON \
             -DRS_ENABLE_DEBUG_SHELL=ON \

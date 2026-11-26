@@ -16,6 +16,11 @@ if(NOT EXISTS "${NEWOSP_DIR}/include/osp/event_loop.hpp")
   message(FATAL_ERROR "NEWOSP_DIR does not point at a newosp checkout: ${NEWOSP_DIR}")
 endif()
 
+set(RS_MAX_CONNECTIONS 16 CACHE STRING "Compile-time connection capacity (4..16)")
+if(NOT RS_MAX_CONNECTIONS MATCHES "^([4-9]|1[0-6])$")
+  message(FATAL_ERROR "RS_MAX_CONNECTIONS must be an integer from 4 to 16")
+endif()
+
 set(OSP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(OSP_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(OSP_WITH_NETWORK ON CACHE BOOL "" FORCE)
@@ -81,7 +86,8 @@ target_link_libraries(rs_core PUBLIC osp)
 target_compile_options(rs_core PRIVATE ${RS_WARN_FLAGS})
 # The version comes from project(VERSION) so that CMake, the git tag and the
 # runtime string reported by the debug shell can never drift apart.
-target_compile_definitions(rs_core PUBLIC OSP_HAS_NETWORK=1 RS_VERSION="${PROJECT_VERSION}")
+target_compile_definitions(rs_core PUBLIC OSP_HAS_NETWORK=1 RS_VERSION="${PROJECT_VERSION}"
+  RS_MAX_CONNECTIONS=${RS_MAX_CONNECTIONS})
 if(RS_HAVE_NEWOSP_RDHUP)
   target_compile_definitions(rs_core PUBLIC RS_HAVE_NEWOSP_RDHUP=1)
 endif()

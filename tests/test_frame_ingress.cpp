@@ -185,6 +185,13 @@ int TestInvalidLengthAndStopped() {
   RS_CHECK(ing.Commit(writer, 65U).has_value() == false);
   ing.Abort(writer);
 
+  RS_CHECK(CommitOne(ing, 1U, rs::kMaxAuBytes, rs::kFrameIdr, nullptr));
+  FrameDesc full{};
+  RS_CHECK(ing.Pop(full));
+  RS_CHECK(ing.Validate(full));
+  RS_CHECK_EQ(full.length, rs::kMaxAuBytes);
+  RS_CHECK_EQ(ing.Data(full)[rs::kMaxAuBytes - 1U], 0x5AU);
+  ing.Release(full);
   RS_CHECK(ing.Acquire(rs::kMaxAuBytes + 1U).has_value() == false);
 
   ing.Stop();
