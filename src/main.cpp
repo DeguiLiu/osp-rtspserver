@@ -7,6 +7,7 @@
 
 #include <cinttypes>
 #include <csignal>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -14,6 +15,7 @@
 #include <charconv>
 #include <chrono>
 #include <memory>
+#include <new>
 #include <signal.h>
 #include <string_view>
 #include <thread>
@@ -171,7 +173,11 @@ int main(int argc, char** argv) {
 
   // The source owns the parameter-set storage that cfg.params points at, so it
   // must be constructed first and destroyed last.
-  rs::FileSource source;
+  alignas(rs::FileSource) static std::byte source_buffer[sizeof(rs::FileSource)];
+  const auto destroy_source = [](rs::FileSource* ptr) noexcept { ptr->~FileSource(); };
+  const std::unique_ptr<rs::FileSource, decltype(destroy_source)> source_storage{
+      ::new (static_cast<void*>(source_buffer)) rs::FileSource, destroy_source};
+  rs::FileSource& source = *source_storage;
   auto opened = source.Open(file_path, cfg.codec);
   if (!opened.has_value()) {
     OSP_LOG_ERROR("main", "cannot open stream %s (error %" PRIu32 ")", file_path,
@@ -180,7 +186,11 @@ int main(int argc, char** argv) {
   }
   cfg.params = opened.value().params;
 
-  rs::RtspServer server;
+  alignas(rs::RtspServer) static std::byte server_buffer[sizeof(rs::RtspServer)];
+  const auto destroy_server = [](rs::RtspServer* ptr) noexcept { ptr->~RtspServer(); };
+  const std::unique_ptr<rs::RtspServer, decltype(destroy_server)> server_storage{
+      ::new (static_cast<void*>(server_buffer)) rs::RtspServer, destroy_server};
+  rs::RtspServer& server = *server_storage;
   auto started = server.Start(cfg);
   if (!started.has_value()) {
     OSP_LOG_ERROR("main", "start failed (error %" PRIu32 "), check --file and --ip",

@@ -31,10 +31,8 @@ struct TrackParams {
 // headers (reserved nal_unit_type values) and vice versa.
 [[nodiscard]] bool DetectCodec(const uint8_t* au, uint32_t au_len, Codec& out) noexcept;
 
-// Rejects parameter sets this build cannot stream (review P1-7): H.264
-// Baseline/Main/High 8-bit 4:2:0 and H.265 Main / Main Still 8-bit 4:2:0.
-// Deeper SPS parsing (chroma_format_idc, bit depth, field coding) is not done
-// here; the server only accepts local files, so a full check stays a TODO.
+// Performs a limited profile check: H.264 Baseline/Main/High and H.265 Main /
+// Main Still. This does not validate chroma format, bit depth or field coding.
 [[nodiscard]] bool ValidateParamSets(const TrackParams& params) noexcept;
 
 }  // namespace rs

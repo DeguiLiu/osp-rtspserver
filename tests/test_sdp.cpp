@@ -48,6 +48,28 @@ rs::SdpParams Params265() {
 }  // namespace
 
 int main() {
+  {
+    constexpr uint8_t vps[] = {0x40U, 0x01U, 0x0CU, 0x01U};
+    constexpr uint8_t sps_main[] = {0x42U, 0x01U, 0x01U, 0x01U};
+    constexpr uint8_t sps_still[] = {0x42U, 0x01U, 0x01U, 0x03U};
+    constexpr uint8_t sps_main10[] = {0x42U, 0x01U, 0x01U, 0x02U};
+    constexpr uint8_t pps[] = {0x44U, 0x01U};
+    rs::TrackParams params;
+    params.codec = rs::Codec::kH265;
+    params.vps = vps;
+    params.vps_len = sizeof(vps);
+    params.sps = sps_main;
+    params.sps_len = sizeof(sps_main);
+    params.pps = pps;
+    params.pps_len = sizeof(pps);
+    RS_CHECK(rs::ValidateParamSets(params));
+    params.sps = sps_still;
+    RS_CHECK(rs::ValidateParamSets(params));
+    params.sps = sps_main10;
+    RS_CHECK(false == rs::ValidateParamSets(params));
+    params.sps_len = 3U;
+    RS_CHECK(false == rs::ValidateParamSets(params));
+  }
   // RFC 4648 base64 vectors.
   {
     char out[32] = {};

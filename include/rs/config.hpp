@@ -21,7 +21,8 @@ constexpr uint32_t kMaxHeaderCount = 24U;
 constexpr uint32_t kMaxHeaderBytes = 2048U;
 constexpr uint32_t kRtspRxBytes = 8192U;     // Per-connection inbound linear buffer.
 constexpr uint32_t kRtspTxBytes = 32768U;    // Per-connection outbound arena (control + TCP media).
-constexpr uint32_t kControlTxLimit = 8192U;  // Control-only backpressure threshold.
+constexpr uint32_t kControlTxReserveBytes = 8192U;
+constexpr uint32_t kMediaTxLimitBytes = kRtspTxBytes - kControlTxReserveBytes;
 
 // Media
 constexpr uint32_t kFrameSlots = 8U;            // Power of two.
@@ -42,7 +43,11 @@ constexpr uint32_t kRtpTsStep = kClockRate / kFps;
 
 // Timers (milliseconds)
 constexpr uint32_t kSessionTimeoutMs = 60000U;
-constexpr uint32_t kPlayIdrTimeoutMs = 2000U;
+// PLAY holds its 200 response until the first readable IDR so that RTP-Info
+// matches the first media packet. A-01 assumes a 2 s GOP, so 2 s left no
+// margin: a client joining just after an IDR would race the deadline on any
+// scheduling delay. Allow one GOP plus 2 s of slack.
+constexpr uint32_t kPlayIdrTimeoutMs = 4000U;
 // Encoder IDR requests are advisory; one per second covers a 2 s GOP.
 constexpr uint32_t kIdrRequestIntervalMs = 1000U;
 constexpr uint32_t kSendStallTimeoutMs = 2000U;
@@ -120,6 +125,11 @@ static_assert((kEmptySlotQueueDepth & (kEmptySlotQueueDepth - 1U)) == 0U, "empty
 static_assert((kInputQueueDepth & (kInputQueueDepth - 1U)) == 0U, "input queue must be a power of two");
 static_assert(kEmptySlotQueueDepth >= kFrameSlots, "empty slot queue must cover all slots");
 static_assert(kInputQueueDepth <= kFrameSlots, "input queue deeper than the pool cannot drain");
+static_assert(kControlTxReserveBytes < kRtspTxBytes, "control reserve must fit in the transmit buffer");
+static_assert(kMediaTxLimitBytes >= (kRtpPayloadMax + kRtpHeaderBytes + kInterleavedHeaderBytes),
+              "media transmit limit must fit one interleaved RTP packet");
+static_assert(kMediaTxLimitBytes >= (kMaxRtcpBytes + kInterleavedHeaderBytes),
+              "media transmit limit must fit one interleaved RTCP packet");
 static_assert(kMaxConnections <= 256U, "connection slot must fit advertised tag limits");
 static_assert(kRtpPayloadMax <= 1200U, "keep RTP payload inside a 1280-byte MTU budget");
 static_assert(kMaxPollEvents <= 64U, "newosp IoPoller tag table holds 64 fds");

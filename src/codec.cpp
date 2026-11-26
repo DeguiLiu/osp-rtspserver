@@ -82,8 +82,7 @@ bool ValidateParamSets(const TrackParams& params) noexcept {
     if (kNalSpsH265 != ((params.sps[0] >> 1U) & 0x3FU)) {
       return false;
     }
-    // general_profile_idc occupies the low 5 bits of the second SPS byte.
-    const uint8_t profile_idc = static_cast<uint8_t>(params.sps[1] & 0x1FU);
+    const uint8_t profile_idc = static_cast<uint8_t>(params.sps[3] & 0x1FU);
     return profile_idc == 1U || profile_idc == 3U;  // Main, Main Still Picture.
   }
   return false;

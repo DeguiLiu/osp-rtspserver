@@ -7,6 +7,7 @@
 #include <cstring>
 
 #include <charconv>
+#include <new>
 
 namespace rs {
 namespace {
@@ -271,7 +272,8 @@ osp::expected<void, ParseError> RtspParser::Drain(const ParserCallbacks& cb) noe
         ok = false;
         err = ParseError::kTooManyHeaders;
       } else {
-        RtspRequest req;
+        request_.~RtspRequest();
+        RtspRequest& req = *::new (static_cast<void*>(&request_)) RtspRequest{};
         if (!ParseHead(reinterpret_cast<const char*>(buf_ + pos), head_len, req)) {
           ok = false;
         } else {

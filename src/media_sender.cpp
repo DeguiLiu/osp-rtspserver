@@ -152,9 +152,20 @@ MediaSender::EnqueueResult MediaSender::OnFrame(const FrameDesc& desc, uint64_t 
     DropToAwaitIdr();
     return EnqueueResult::kQueueFull;
   }
-  need_idr_ = false;
+  // The first IDR after PLAY (or after a gap) is where a decoder (re)starts:
+  // send the stored parameter sets in band even when the encoder does not
+  // repeat them in this AU. The flag is forced on the per-client queue entry,
+  // never on the shared frame, so other clients are unaffected.
+  const bool is_idr = (desc.flags & kFrameIdr) != 0U;
+  const bool inject_params = need_idr_ && is_idr;
+  if (is_idr) {
+    need_idr_ = false;
+  }
   const uint32_t tail = (queue_head_ + queue_count_) % kFrameQueueDepth;
   queue_[tail] = desc;
+  if (inject_params) {
+    queue_[tail].flags = static_cast<uint16_t>(queue_[tail].flags | kFrameHasParams);
+  }
   queue_ns_[tail] = now_ns;
   ++queue_count_;
   return EnqueueResult::kEnqueued;

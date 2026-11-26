@@ -46,20 +46,29 @@ bool StartPlay(rse2e::Client& client, uint16_t port) {
   return !session.empty() && client.Request("PLAY", uri, {"CSeq: 2", "Session: " + session}, "", err);
 }
 
-}  // namespace
-
-int main() {
+int32_t RunCase(rs::Codec codec, uint16_t port) {
   uint8_t sps[4] = {0x67, 0x42, 0xC0, 0x1F};
   uint8_t pps[4] = {0x68, 0xCE, 0x3C, 0x80};
+  uint8_t hevc_vps[4] = {0x40, 0x01, 0x0C, 0x01};
+  uint8_t hevc_sps[4] = {0x42, 0x01, 0x01, 0x01};
+  uint8_t hevc_pps[4] = {0x44, 0x01, 0xC1, 0x72};
   rs::TrackParams params;
-  params.codec = rs::Codec::kH264;
+  params.codec = codec;
   params.sps = sps;
   params.sps_len = sizeof(sps);
   params.pps = pps;
   params.pps_len = sizeof(pps);
+  if (rs::Codec::kH265 == codec) {
+    params.vps = hevc_vps;
+    params.vps_len = sizeof(hevc_vps);
+    params.sps = hevc_sps;
+    params.sps_len = sizeof(hevc_sps);
+    params.pps = hevc_pps;
+    params.pps_len = sizeof(hevc_pps);
+  }
 
   rs::ServerConfig cfg;
-  cfg.port = 18579U;
+  cfg.port = port;
   cfg.params = params;
   cfg.advertise_ip = "127.0.0.1";
   cfg.max_clients = 4U;
@@ -83,11 +92,14 @@ int main() {
   auto writer = server.Ingress().Acquire(8U);
   RS_CHECK(writer.has_value());
   rs::FrameIngress::Writer w = writer.value();
-  const uint8_t au[8] = {0x00, 0x00, 0x00, 0x01, 0x65, 0x88, 0x84, 0x00};
-  std::memcpy(w.au, au, sizeof(au));
+  const uint8_t h264_au[8] = {0x00, 0x00, 0x00, 0x01, 0x65, 0x88, 0x84, 0x00};
+  const uint8_t h265_au[8] = {0x00, 0x00, 0x00, 0x01, 0x26, 0x01, 0x84, 0x00};
+  const uint8_t* const au = (rs::Codec::kH265 == codec) ? h265_au : h264_au;
+  constexpr uint32_t kAuBytes = sizeof(h264_au);
+  std::memcpy(w.au, au, kAuBytes);
   w.desc.pts_ns = 1000U;
   w.desc.flags = rs::kFrameIdr;
-  RS_CHECK(server.Ingress().Commit(w, sizeof(au)).has_value());
+  RS_CHECK(server.Ingress().Commit(w, kAuBytes).has_value());
   server.Wake();
 
   std::string err;
@@ -103,28 +115,37 @@ int main() {
   // Let the shared rate-limit window expire first.
   std::this_thread::sleep_for(std::chrono::milliseconds(1100));
   RS_CHECK(!server.Ingress().Acquire(0U).has_value());
-  auto predictive = server.Ingress().Acquire(sizeof(au));
+  auto predictive = server.Ingress().Acquire(kAuBytes);
   RS_CHECK(predictive.has_value());
   rs::FrameIngress::Writer p = predictive.value();
-  std::memcpy(p.au, au, sizeof(au));
-  p.au[4] = 0x41U;
+  std::memcpy(p.au, au, kAuBytes);
+  p.au[4] = (rs::Codec::kH265 == codec) ? 0x02U : 0x41U;
   p.desc.pts_ns = 2000U;
   p.desc.flags = 0U;
-  RS_CHECK(server.Ingress().Commit(p, sizeof(au)).has_value());
+  RS_CHECK(server.Ingress().Commit(p, kAuBytes).has_value());
   server.Wake();
   RS_CHECK(WaitForIdr(2U, 500U));
 
-  auto recovery = server.Ingress().Acquire(sizeof(au));
+  auto recovery = server.Ingress().Acquire(kAuBytes);
   RS_CHECK(recovery.has_value());
   rs::FrameIngress::Writer r = recovery.value();
-  std::memcpy(r.au, au, sizeof(au));
+  std::memcpy(r.au, au, kAuBytes);
   r.desc.pts_ns = 3000U;
   r.desc.flags = rs::kFrameIdr;
-  RS_CHECK(server.Ingress().Commit(r, sizeof(au)).has_value());
+  RS_CHECK(server.Ingress().Commit(r, kAuBytes).has_value());
   server.Wake();
   RS_CHECK(!WaitForIdr(3U, 1100U));
   server.Stop();
   RS_CHECK(!server.Running());
+  return 0;
+}
+
+}  // namespace
+
+int main() {
+  RS_CHECK_EQ(RunCase(rs::Codec::kH264, 18579U), 0);
+  g_idr_calls.store(0U, std::memory_order_relaxed);
+  RS_CHECK_EQ(RunCase(rs::Codec::kH265, 18580U), 0);
   std::printf("test_server_external: all checks passed\n");
   return 0;
 }

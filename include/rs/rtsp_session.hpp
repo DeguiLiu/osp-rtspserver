@@ -218,7 +218,7 @@ class RtspSession {
   [[nodiscard]] bool Playing() const noexcept { return hsm_.IsInState(sess::kPlaying); }
   [[nodiscard]] bool Active() const noexcept { return hsm_.IsInState(sess::kActive); }
   [[nodiscard]] int32_t State() const noexcept { return hsm_.State(); }
-  [[nodiscard]] bool HasSession() const noexcept { return session_id_len_ != 0U; }
+  [[nodiscard]] bool HasSession() const noexcept { return session_id_.empty() == false; }
   [[nodiscard]] bool AwaitingRtpInfo() const noexcept { return awaiting_rtp_info_; }
   [[nodiscard]] TransportKind Transport() const noexcept { return transport_; }
   [[nodiscard]] uint8_t RtpChannel() const noexcept { return rtp_channel_; }
@@ -226,7 +226,7 @@ class RtspSession {
   [[nodiscard]] CloseReason Reason() const noexcept { return close_reason_; }
   [[nodiscard]] uint16_t LastStatus() const noexcept { return last_status_; }
   [[nodiscard]] uint64_t LastActivityNs() const noexcept { return last_activity_ns_; }
-  [[nodiscard]] const char* SessionId() const noexcept { return session_id_; }
+  [[nodiscard]] const char* SessionId() const noexcept { return session_id_.c_str(); }
   [[nodiscard]] SessionSnapshot Snapshot(uint64_t now_ns) const noexcept;
   [[nodiscard]] const SessionCounters& Counters() const noexcept { return counters_; }
   [[nodiscard]] const sess::Context& HsmContext() const noexcept { return hsm_ctx_; }
@@ -247,7 +247,6 @@ class RtspSession {
   static void OutStr(OutBuf& out, const char* s) noexcept;
   static void OutCh(OutBuf& out, char c) noexcept;
   static void OutU32(OutBuf& out, uint32_t v) noexcept;
-  static void OutSpan(OutBuf& out, osp::byte_span s) noexcept;
 
   uint16_t HandleOptions(const RtspRequest& req, uint32_t cseq, uint64_t now) noexcept;
   uint16_t HandleDescribe(const RtspRequest& req, uint32_t cseq, uint64_t now) noexcept;
@@ -284,8 +283,7 @@ class RtspSession {
   MediaSender media_;
 
   // Session identity (regenerated per SETUP).
-  char session_id_[20] = {};
-  uint32_t session_id_len_ = 0U;
+  osp::FixedString<16U> session_id_{};
   uint32_t ssrc_ = 0U;
   uint16_t next_seq_ = 0U;
   uint32_t id_epoch_ = 0U;
@@ -308,6 +306,7 @@ class RtspSession {
   bool awaiting_rtp_info_ = false;
 
   uint64_t last_activity_ns_ = 0U;
+  uint64_t last_peer_activity_ns_ = 0U;
   RtcpEndpoint rtcp_;
   uint64_t idr_deadline_ns_ = 0U;
   uint32_t cseq_ = 0U;

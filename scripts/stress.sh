@@ -204,14 +204,17 @@ BASELINE_THREADS="$(read_threads)"
 log "stress: baseline rss=${BASELINE_RSS}KB fds=${BASELINE_FDS} threads=${BASELINE_THREADS}"
 
 PIDS=()
+CLIENT_LOGS=()
 for transport in ${TRANSPORTS}; do
-  for _ in $(seq 1 "${CLIENTS_PER_TRANSPORT}"); do
+  for client_index in $(seq 1 "${CLIENTS_PER_TRANSPORT}"); do
+    CLIENT_LOG="${OUT}/client_${transport}_${client_index}.log"
     # info + a long stats period keeps one final "video:...KiB" line per client
     # so UDP egress can be verified (server tx_bytes covers TCP control only).
     ffmpeg -nostdin -loglevel info -stats -stats_period 60 -rtsp_transport "${transport}" \
       -i "rtsp://127.0.0.1:${PORT}/live" -t "${DURATION}" "${CLIENT_MODE[@]}" -f null - \
-      >/dev/null 2>>"${OUT}/client_${transport}.log" &
+      >/dev/null 2>"${CLIENT_LOG}" &
     PIDS+=($!)
+    CLIENT_LOGS+=("${CLIENT_LOG}")
   done
 done
 
@@ -271,13 +274,17 @@ for pid in "${PIDS[@]}"; do
 done
 CLIENT_OK=0
 CLIENT_FAIL=0
-for pid in "${PIDS[@]}"; do
-  wait "${pid}" 2>/dev/null
+for client_index in "${!PIDS[@]}"; do
+  wait "${PIDS[client_index]}" 2>/dev/null
   CLIENT_RC=$?
-  case "${CLIENT_RC}" in
-    0 | 130 | 143) CLIENT_OK=$((CLIENT_OK + 1)) ;;
-    *) CLIENT_FAIL=$((CLIENT_FAIL + 1)) ;;
-  esac
+  CLIENT_KIB="$(grep -o 'video:[0-9]*KiB' "${CLIENT_LOGS[client_index]}" 2>/dev/null |
+    tr -dc '0-9\n' | awk '{sum += $1} END {print sum + 0}')"
+  if [ "${CLIENT_RC}" -eq 0 ] && [ "${CLIENT_KIB}" -gt 0 ]; then
+    CLIENT_OK=$((CLIENT_OK + 1))
+  else
+    CLIENT_FAIL=$((CLIENT_FAIL + 1))
+    log "stress: client failed rc=${CLIENT_RC} video_kib=${CLIENT_KIB} log=${CLIENT_LOGS[client_index]}"
+  fi
 done
 
 FINAL_RSS="$(read_rss_kb)"
@@ -292,7 +299,7 @@ STOP_MS=$(( $(date +%s%3N) - STOP_START_MS ))
 log "stress: final rss=${FINAL_RSS}KB fds=${FINAL_FDS} threads=${FINAL_THREADS} stop=${STOP_MS}ms"
 log "stress: clients_ok=${CLIENT_OK} clients_fail=${CLIENT_FAIL} of ${CLIENTS} (decode=${DECODE})"
 for transport in ${TRANSPORTS}; do
-  VIDEO_KIB="$(grep -o 'video:[0-9]*KiB' "${OUT}/client_${transport}.log" 2>/dev/null |
+  VIDEO_KIB="$(grep -h -o 'video:[0-9]*KiB' "${OUT}"/client_"${transport}"_*.log 2>/dev/null |
     tr -dc '0-9\n' | awk '{sum += $1} END {print sum + 0}')"
   log "stress: transport=${transport} video_kib=${VIDEO_KIB}"
 done
@@ -321,4 +328,7 @@ if [ -z "${INPUT_FILE}" ]; then
   rm -f "${STREAM}" "${STREAM}.expect"
 fi
 log "stress: done, csv=${CSV}"
+if [ "${CLIENT_FAIL}" -ne 0 ] || [ "${CLIENT_OK}" -ne "${CLIENTS}" ]; then
+  exit 1
+fi
 exit 0

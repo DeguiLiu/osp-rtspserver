@@ -320,6 +320,7 @@ osp::expected<void, ServerError> RtspServer::Start(const ServerConfig& cfg) noex
   running_.store(true, std::memory_order_release);
   if (!StartThreads()) {
     running_.store(false, std::memory_order_release);
+    static_cast<void>(svc_hsm_.Dispatch(svc::kStartFail));
     return osp::expected<void, ServerError>::error(ServerError::kBackendFailed);
   }
   static_cast<void>(svc_hsm_.Dispatch(svc::kThreadStarted));
@@ -328,34 +329,31 @@ osp::expected<void, ServerError> RtspServer::Start(const ServerConfig& cfg) noex
 }
 
 void RtspServer::ReleaseStartHandles() noexcept {
+  if (maint_timer_ != 0U) {
+    static_cast<void>(Cancel(maint_timer_));
+    maint_timer_ = 0U;
+  }
   CloseListener();
 }
 
 bool RtspServer::StartThreads() noexcept {
-  if (0 != pthread_create(&loop_thread_, nullptr, &RtspServer::LoopThreadEntry, this)) {
-    return false;
-  }
-  loop_thread_started_ = true;
-  return true;
+  osp::ThreadOptions options = cfg_.loop_thread;
+  options.name = "rtsp-loop";
+  return loop_thread_.Start(options, [this]() noexcept { LoopThreadMain(); });
 }
 
 void RtspServer::JoinThreads() noexcept {
-  if (loop_thread_started_) {
-    static_cast<void>(pthread_join(loop_thread_, nullptr));
-    loop_thread_started_ = false;
-  }
+  loop_thread_.join();
 }
 
-void* RtspServer::LoopThreadEntry(void* self) noexcept {
-  auto* server = static_cast<RtspServer*>(self);
-  server->EventLoop::Run();
+void RtspServer::LoopThreadMain() noexcept {
+  EventLoop::Run();
 #if defined(RS_HAVE_NEWOSP_HASFAILED)
-  if (server->HasFailed()) {
-    server->stats_.loop_failed = true;
+  if (HasFailed()) {
+    stats_.loop_failed = true;
   }
 #endif
-  server->PublishStats();
-  return nullptr;
+  PublishStats();
 }
 
 void RtspServer::Stop() noexcept {
@@ -447,6 +445,11 @@ ServerStats RtspServer::Stats() const noexcept {
 ServerSnapshot RtspServer::Snapshot() const noexcept {
   std::lock_guard<std::mutex> lock(snapshot_mutex_);
   return snapshot_full_;
+}
+
+void RtspServer::CopySnapshot(ServerSnapshot& out) const noexcept {
+  std::lock_guard<std::mutex> lock(snapshot_mutex_);
+  out = snapshot_full_;
 }
 
 void RtspServer::RequestStop() noexcept {
@@ -1131,7 +1134,9 @@ void RtspServer::PublishStats() noexcept {
 
 void RtspServer::PublishSnapshot() noexcept {
   ComputePercentiles();
-  ServerSnapshot out;
+  ServerSnapshot& out = snapshot_staging_;
+  out.client_count = 0U;
+  out.advertise_ip[0] = '\0';
   out.stats = stats_;
   out.pool = ingress_.Stats();
   out.listener_fd = listener_fd_;

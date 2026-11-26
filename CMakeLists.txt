@@ -33,6 +33,17 @@ int main() { auto fn = &osp::TcpListener::Accept4; (void)fn; return 0; }" RS_HAV
 check_cxx_source_compiles("#include \"osp/event_loop.hpp\"
 struct D : osp::EventLoop<D> {};
 int main() { auto fn = &D::HasFailed; (void)fn; return 0; }" RS_HAVE_NEWOSP_HASFAILED)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  unset(RS_HAVE_NEWOSP_CHECKED_THREAD CACHE)
+  check_cxx_source_compiles("#include \"osp/thread.hpp\"
+#if !defined(OSP_THREAD_POSIX_CHECKED_START) || OSP_THREAD_POSIX_CHECKED_START != 1
+#error newosp POSIX checked thread startup is required
+#endif
+int main() { return 0; }" RS_HAVE_NEWOSP_CHECKED_THREAD)
+  if(NOT RS_HAVE_NEWOSP_CHECKED_THREAD)
+    message(FATAL_ERROR "newosp must provide POSIX checked thread startup (OSP_THREAD_POSIX_CHECKED_START)")
+  endif()
+endif()
 unset(CMAKE_REQUIRED_INCLUDES)
 
 option(RS_NO_EXCEPTIONS "Build with -fno-exceptions -fno-rtti" ON)

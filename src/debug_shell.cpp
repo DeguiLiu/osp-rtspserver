@@ -39,6 +39,12 @@ RtspServer* Server() noexcept {
   return ShellContext::Instance().Server();
 }
 
+const ServerSnapshot& ShellSnapshot() noexcept {
+  static thread_local ServerSnapshot snapshot;
+  Server()->CopySnapshot(snapshot);
+  return snapshot;
+}
+
 bool ParseU32(const char* text, uint32_t& value) noexcept {
   bool ok = text != nullptr;
   if (ok) {
@@ -112,7 +118,7 @@ int CmdStats(int argc, char** argv) noexcept {
   if (!RequireServer()) {
     return -1;
   }
-  const ServerSnapshot s = Server()->Snapshot();
+  const ServerSnapshot& s = ShellSnapshot();
   const ServerStats& g = s.stats;
   osp::DebugShell::Printf("conns=%" PRIu32 "/%" PRIu32 " playing=%" PRIu32 " accepts=%" PRIu64 " full=%" PRIu64
                           " failed=%" PRIu64 " reqs=%" PRIu64 "\r\n",
@@ -150,7 +156,7 @@ int CmdClients(int argc, char** argv) noexcept {
   if (!RequireServer()) {
     return -1;
   }
-  const ServerSnapshot s = Server()->Snapshot();
+  const ServerSnapshot& s = ShellSnapshot();
   if (s.client_count == 0U) {
     osp::DebugShell::Printf("no active clients\r\n");
     return 0;
@@ -185,7 +191,7 @@ int CmdClient(int argc, char** argv) noexcept {
     osp::DebugShell::Printf("invalid slot\r\n");
     return -1;
   }
-  const ServerSnapshot s = Server()->Snapshot();
+  const ServerSnapshot& s = ShellSnapshot();
   for (uint32_t i = 0U; i < s.client_count; ++i) {
     const ClientSnapshot& c = s.clients[i];
     if (c.slot != slot) {
@@ -243,7 +249,7 @@ int CmdNet(int argc, char** argv) noexcept {
   if (!RequireServer()) {
     return -1;
   }
-  const ServerSnapshot s = Server()->Snapshot();
+  const ServerSnapshot& s = ShellSnapshot();
   osp::DebugShell::Printf("slot rtt_us cwnd retrans unacked notsent sndbuf rcvbuf\r\n");
   for (uint32_t i = 0U; i < s.client_count; ++i) {
     const ClientSnapshot& c = s.clients[i];
@@ -261,7 +267,7 @@ int CmdPool(int argc, char** argv) noexcept {
   if (!RequireServer()) {
     return -1;
   }
-  const ServerSnapshot s = Server()->Snapshot();
+  const ServerSnapshot& s = ShellSnapshot();
   osp::DebugShell::Printf("frames slots=%" PRIu32 " free=%" PRIu32 " in_use=%" PRIu32 " input_q=%" PRIu32
                           " empty_q=%" PRIu32 "\r\n",
                           static_cast<uint32_t>(kFrameSlots), static_cast<uint32_t>(s.pool.free_slots),
@@ -279,7 +285,7 @@ int CmdFd(int argc, char** argv) noexcept {
   if (!RequireServer()) {
     return -1;
   }
-  const ServerSnapshot s = Server()->Snapshot();
+  const ServerSnapshot& s = ShellSnapshot();
   osp::DebugShell::Printf("listener fd=%d watchers=%" PRIu32 " timers=%" PRIu32 "\r\n", s.listener_fd,
                           static_cast<uint32_t>(s.watchers_used), static_cast<uint32_t>(s.timers_used));
   for (uint32_t i = 0U; i < s.client_count; ++i) {
@@ -301,7 +307,7 @@ int CmdTimers(int argc, char** argv) noexcept {
   if (!RequireServer()) {
     return -1;
   }
-  const ServerSnapshot s = Server()->Snapshot();
+  const ServerSnapshot& s = ShellSnapshot();
   const uint64_t age_ms = (s.published_ns == 0U) ? 0U : (osp::SteadyNowNs() - s.published_ns) / kNsPerMs;
   osp::DebugShell::Printf("maintenance=%" PRIu32 "ms timers_used=%" PRIu32 " snapshot_age=%" PRIu64 "ms\r\n",
                           static_cast<uint32_t>(kMaintenancePeriodMs), static_cast<uint32_t>(s.timers_used),
@@ -315,7 +321,7 @@ int CmdStream(int argc, char** argv) noexcept {
   if (!RequireServer()) {
     return -1;
   }
-  const ServerSnapshot s = Server()->Snapshot();
+  const ServerSnapshot& s = ShellSnapshot();
   const ServerStats& g = s.stats;
   osp::DebugShell::Printf("codec=%s param_gen=%" PRIu32 " vps=%" PRIu32 " sps=%" PRIu32 " pps=%" PRIu32
                           " idr_hook=%d\r\n",
@@ -334,7 +340,7 @@ int CmdRtcp(int argc, char** argv) noexcept {
   if (!RequireServer()) {
     return -1;
   }
-  const ServerSnapshot s = Server()->Snapshot();
+  const ServerSnapshot& s = ShellSnapshot();
   uint32_t sr = 0U;
   uint32_t rr = 0U;
   uint32_t bye = 0U;
@@ -358,7 +364,7 @@ int CmdLatency(int argc, char** argv) noexcept {
   if (!RequireServer()) {
     return -1;
   }
-  const ServerSnapshot s = Server()->Snapshot();
+  const ServerSnapshot& s = ShellSnapshot();
   osp::DebugShell::Printf("loop p50=%" PRIu32 "us p95=%" PRIu32 "us p99=%" PRIu32 "us samples=%" PRIu64 "\r\n",
                           static_cast<uint32_t>(s.stats.loop_p50_us), static_cast<uint32_t>(s.stats.loop_p95_us),
                           static_cast<uint32_t>(s.stats.loop_p99_us), static_cast<uint64_t>(s.stats.loop_samples));
@@ -384,7 +390,7 @@ int CmdConfig(int argc, char** argv) noexcept {
   if (!RequireServer()) {
     return -1;
   }
-  const ServerSnapshot s = Server()->Snapshot();
+  const ServerSnapshot& s = ShellSnapshot();
   osp::DebugShell::Printf("port=%" PRIu32 " advertise=%s max_clients=%" PRIu32 " frame_slots=%" PRIu32 "\r\n",
                           static_cast<uint32_t>(s.port), s.advertise_ip, static_cast<uint32_t>(s.max_clients),
                           static_cast<uint32_t>(kFrameSlots));
@@ -455,7 +461,7 @@ int CmdKick(int argc, char** argv) noexcept {
     osp::DebugShell::Printf("invalid slot\r\n");
     return -1;
   }
-  if (!SlotActive(Server()->Snapshot(), static_cast<uint32_t>(slot))) {
+  if (!SlotActive(ShellSnapshot(), static_cast<uint32_t>(slot))) {
     osp::DebugShell::Printf("slot not active\r\n");
     return -1;
   }
@@ -477,7 +483,7 @@ int CmdReset(int argc, char** argv) noexcept {
       osp::DebugShell::Printf("invalid slot\r\n");
       return -1;
     }
-    if (!SlotActive(Server()->Snapshot(), static_cast<uint32_t>(slot))) {
+    if (!SlotActive(ShellSnapshot(), static_cast<uint32_t>(slot))) {
       osp::DebugShell::Printf("slot not active\r\n");
       return -1;
     }
@@ -512,7 +518,7 @@ int CmdTrace(int argc, char** argv) noexcept {
     osp::DebugShell::Printf("usage: trace <slot> on|off\r\n");
     return -1;
   }
-  if (!SlotActive(Server()->Snapshot(), static_cast<uint32_t>(slot))) {
+  if (!SlotActive(ShellSnapshot(), static_cast<uint32_t>(slot))) {
     osp::DebugShell::Printf("slot not active\r\n");
     return -1;
   }
@@ -532,7 +538,7 @@ int CmdIdr(int argc, char** argv) noexcept {
   if (!RequireServer()) {
     return -1;
   }
-  if (!Server()->Snapshot().idr_hook_set) {
+  if (!ShellSnapshot().idr_hook_set) {
     osp::DebugShell::Printf("idr: no encoder hook registered\r\n");
     return -1;
   }
@@ -582,7 +588,7 @@ int CmdFault(int argc, char** argv) noexcept {
     osp::DebugShell::Printf("invalid slot\r\n");
     return -1;
   }
-  if (!SlotActive(Server()->Snapshot(), static_cast<uint32_t>(slot))) {
+  if (!SlotActive(ShellSnapshot(), static_cast<uint32_t>(slot))) {
     osp::DebugShell::Printf("slot not active\r\n");
     return -1;
   }
@@ -622,7 +628,7 @@ int CmdSlow(int argc, char** argv) noexcept {
     osp::DebugShell::Printf("invalid slot\r\n");
     return -1;
   }
-  if (!SlotActive(Server()->Snapshot(), static_cast<uint32_t>(slot))) {
+  if (!SlotActive(ShellSnapshot(), static_cast<uint32_t>(slot))) {
     osp::DebugShell::Printf("slot not active\r\n");
     return -1;
   }
@@ -639,39 +645,32 @@ int CmdSlow(int argc, char** argv) noexcept {
 #endif
 
 void RegisterShellCommands() noexcept {
-  static bool registered = false;
-  if (registered) {
-    return;
-  }
-  registered = true;
-  auto& reg = osp::detail::GlobalCmdRegistry::Instance();
-  static_cast<void>(reg.Register("stats", CmdStats, "Show global server counters"));
-  static_cast<void>(reg.Register("clients", CmdClients, "List active RTSP clients"));
-  static_cast<void>(reg.Register("client", CmdClient, "Show one client: client <slot>"));
-  static_cast<void>(reg.Register("pool", CmdPool, "Show frame pool and queues"));
-  static_cast<void>(reg.Register("fd", CmdFd, "Show listener/client fds and watchers"));
-  static_cast<void>(reg.Register("timers", CmdTimers, "Show timers and snapshot age"));
-  static_cast<void>(reg.Register("stream", CmdStream, "Show codec and source state"));
-  static_cast<void>(reg.Register("net", CmdNet, "Show TCP RTT/cwnd/retrans/socket buffers"));
-  static_cast<void>(reg.Register("rtcp", CmdRtcp, "Show RTCP status"));
-  static_cast<void>(reg.Register("latency", CmdLatency, "Show loop latency percentiles"));
-  static_cast<void>(reg.Register("mem", CmdMem, "Show sizes and static buffers"));
-  static_cast<void>(reg.Register("config", CmdConfig, "Show runtime limits"));
-  static_cast<void>(reg.Register("time", CmdTime, "Show monotonic and wall clock"));
-  static_cast<void>(reg.Register("version", CmdVersion, "Show build version"));
-  static_cast<void>(reg.Register("log", CmdLog, "Set log level", osp::ShellCmdFlags::kAdmin));
-  static_cast<void>(reg.Register("kick", CmdKick, "Close one client: kick <slot>", osp::ShellCmdFlags::kAdmin));
-  static_cast<void>(reg.Register("reset", CmdReset, "Reset stats or one client", osp::ShellCmdFlags::kAdmin));
-  static_cast<void>(
-      reg.Register("trace", CmdTrace, "Toggle packet trace: trace <slot> on|off", osp::ShellCmdFlags::kAdmin));
-  static_cast<void>(
-      reg.Register("idr", CmdIdr, "Request an IDR from the registered encoder hook", osp::ShellCmdFlags::kAdmin));
-  static_cast<void>(reg.Register("shutdown", CmdShutdown, "Request graceful shutdown", osp::ShellCmdFlags::kAdmin));
+  static osp::ShellAutoReg stats{"stats", CmdStats, "Show global server counters"};
+  static osp::ShellAutoReg clients{"clients", CmdClients, "List active RTSP clients"};
+  static osp::ShellAutoReg client{"client", CmdClient, "Show one client: client <slot>"};
+  static osp::ShellAutoReg pool{"pool", CmdPool, "Show frame pool and queues"};
+  static osp::ShellAutoReg fd{"fd", CmdFd, "Show listener/client fds and watchers"};
+  static osp::ShellAutoReg timers{"timers", CmdTimers, "Show timers and snapshot age"};
+  static osp::ShellAutoReg stream{"stream", CmdStream, "Show codec and source state"};
+  static osp::ShellAutoReg net{"net", CmdNet, "Show TCP RTT/cwnd/retrans/socket buffers"};
+  static osp::ShellAutoReg rtcp{"rtcp", CmdRtcp, "Show RTCP status"};
+  static osp::ShellAutoReg latency{"latency", CmdLatency, "Show loop latency percentiles"};
+  static osp::ShellAutoReg mem{"mem", CmdMem, "Show sizes and static buffers"};
+  static osp::ShellAutoReg config{"config", CmdConfig, "Show runtime limits"};
+  static osp::ShellAutoReg time{"time", CmdTime, "Show monotonic and wall clock"};
+  static osp::ShellAutoReg version{"version", CmdVersion, "Show build version"};
+  static osp::ShellAutoReg log{"log", CmdLog, "Set log level", osp::ShellCmdFlags::kAdmin};
+  static osp::ShellAutoReg kick{"kick", CmdKick, "Close one client: kick <slot>", osp::ShellCmdFlags::kAdmin};
+  static osp::ShellAutoReg reset{"reset", CmdReset, "Reset stats or one client", osp::ShellCmdFlags::kAdmin};
+  static osp::ShellAutoReg trace{"trace", CmdTrace, "Toggle packet trace: trace <slot> on|off",
+                                 osp::ShellCmdFlags::kAdmin};
+  static osp::ShellAutoReg idr{"idr", CmdIdr, "Request an IDR from the registered encoder hook",
+                               osp::ShellCmdFlags::kAdmin};
+  static osp::ShellAutoReg shutdown{"shutdown", CmdShutdown, "Request graceful shutdown", osp::ShellCmdFlags::kAdmin};
 #if defined(RS_ENABLE_FAULT_INJECTION)
-  static_cast<void>(
-      reg.Register("fault", CmdFault, "Fault injection: drop/stall/eagain/idr", osp::ShellCmdFlags::kAdmin));
-  static_cast<void>(reg.Register("simulate", CmdSlow, "Simulate slow client: simulate slow <slot> <bps>",
-                                 osp::ShellCmdFlags::kAdmin));
+  static osp::ShellAutoReg fault{"fault", CmdFault, "Fault injection: drop/stall/eagain/idr", osp::ShellCmdFlags::kAdmin};
+  static osp::ShellAutoReg simulate{"simulate", CmdSlow, "Simulate slow client: simulate slow <slot> <bps>",
+                                    osp::ShellCmdFlags::kAdmin};
 #endif
 }
 

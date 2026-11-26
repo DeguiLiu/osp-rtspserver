@@ -247,6 +247,28 @@ int TestProducerSlotHandoff() {
   return 0;
 }
 
+int TestRepeatedFrameReclamation() {
+  FrameIngress ing;
+  for (uint32_t round = 0U; round < 100000U; ++round) {
+    FrameDesc desc{};
+    RS_CHECK(CommitOne(ing, round, 16U, 0U, nullptr));
+    RS_CHECK(ing.Pop(desc));
+    for (uint32_t client = 0U; client < rs::kMaxConnections; ++client) {
+      RS_CHECK(ing.AddRef(desc));
+    }
+    for (uint32_t client = 0U; client < rs::kMaxConnections; ++client) {
+      ing.Release(desc);
+    }
+    ing.Release(desc);
+  }
+  const auto stats = ing.Stats();
+  RS_CHECK_EQ(stats.free_slots, rs::kFrameSlots);
+  RS_CHECK_EQ(stats.in_use_slots, 0U);
+  RS_CHECK_EQ(stats.producer_orphan_drops, 0U);
+  RS_CHECK_EQ(stats.loop_orphan_drops, 0U);
+  return 0;
+}
+
 }  // namespace
 
 int main() {
@@ -265,6 +287,8 @@ int main() {
   if (TestStats() != 0)
     return 1;
   if (TestProducerSlotHandoff() != 0)
+    return 1;
+  if (TestRepeatedFrameReclamation() != 0)
     return 1;
   std::printf("test_frame_ingress: all checks passed\n");
   return 0;

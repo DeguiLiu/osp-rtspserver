@@ -15,6 +15,7 @@
 
 #include <cstdint>
 
+#include <type_traits>
 #include <variant>
 
 namespace rs {
@@ -23,6 +24,8 @@ namespace rs {
 // codec: the variant carries the H.264 or H.265 cursor, so no separate codec
 // flag has to be kept in sync with it.
 using CodecCursor = std::variant<ClientCursor, HevcCursor>;
+static_assert(std::is_nothrow_copy_constructible<CodecCursor>::value, "cursor checkpoint must not throw");
+static_assert(std::is_nothrow_copy_assignable<CodecCursor>::value, "cursor restore must not throw");
 
 class MediaSender final {
  public:

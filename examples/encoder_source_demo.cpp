@@ -11,6 +11,7 @@
 
 #include <cinttypes>
 #include <csignal>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -18,6 +19,8 @@
 
 #include <atomic>
 #include <chrono>
+#include <memory>
+#include <new>
 #include <signal.h>
 #include <thread>
 
@@ -216,7 +219,11 @@ int main(int argc, char** argv) {
   static_cast<void>(sigaction(SIGTERM, &sa, nullptr));
 
   EncoderState state;
-  rs::RtspServer server;
+  alignas(rs::RtspServer) static std::byte server_buffer[sizeof(rs::RtspServer)];
+  const auto destroy_server = [](rs::RtspServer* ptr) noexcept { ptr->~RtspServer(); };
+  const std::unique_ptr<rs::RtspServer, decltype(destroy_server)> server_storage{
+      ::new (static_cast<void*>(server_buffer)) rs::RtspServer, destroy_server};
+  rs::RtspServer& server = *server_storage;
   server.SetIdrRequester(&OnIdrRequest, &state);
   const auto started = server.Start(cfg);
   if (!started.has_value()) {

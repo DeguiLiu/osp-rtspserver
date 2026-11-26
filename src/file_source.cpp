@@ -191,13 +191,15 @@ bool FileSource::LoadParamSets() noexcept {
   const bool h265 = (codec == Codec::kH265);
   const uint32_t need = h265 ? 0x7U : 0x6U;
   uint32_t got = 0U;
-  uint8_t chunk[16384];
+  uint8_t* const chunk = au_buf_;
+  constexpr uint32_t kScanBufferBytes = 16384U;
+  static_assert(kScanBufferBytes <= (kMaxAuBytes + 8192U), "scan buffer must fit in source storage");
   uint32_t carry = 0U;
   uint64_t scanned = 0U;
   bool eof = false;
   bool ok = true;
   while (ok && !eof && got != need && scanned < kParamScanLimit) {
-    const size_t n = std::fread(chunk + carry, 1U, sizeof(chunk) - carry, file_);
+    const size_t n = std::fread(chunk + carry, 1U, kScanBufferBytes - carry, file_);
     eof = (n == 0U);
     const uint32_t len = carry + static_cast<uint32_t>(n);
     uint32_t i = 0U;
@@ -262,41 +264,36 @@ bool FileSource::LoadParamSets() noexcept {
   return ok && got == need;
 }
 
-osp::expected<void, FileSourceError> FileSource::Start(FrameIngress& ingress, SourceCallbacks callbacks) noexcept {
+osp::expected<void, FileSourceError> FileSource::Start(FrameIngress& ingress, SourceCallbacks callbacks,
+                                                      const osp::ThreadOptions& options) noexcept {
   if (file_ == nullptr) {
     return osp::expected<void, FileSourceError>::error(FileSourceError::kOpenFailed);
   }
-  if (thread_started_) {
+  if (thread_.joinable()) {
     return osp::expected<void, FileSourceError>::error(FileSourceError::kAlreadyStarted);
   }
   ingress_ = &ingress;
   callbacks_ = callbacks;
   stop_.store(false, std::memory_order_release);
-  if (0 != pthread_create(&thread_, nullptr, &FileSource::ThreadEntry, this)) {
+  osp::ThreadOptions thread_options = options;
+  thread_options.name = "rtsp-source";
+  if (false == thread_.Start(thread_options, [this]() noexcept { SourceMain(); })) {
     ingress_ = nullptr;
+    callbacks_ = SourceCallbacks{};
     return osp::expected<void, FileSourceError>::error(FileSourceError::kThreadFailed);
   }
-  thread_started_ = true;
   return osp::expected<void, FileSourceError>::success();
 }
 
 void FileSource::Stop() noexcept {
   stop_.store(true, std::memory_order_release);
-  if (thread_started_) {
-    static_cast<void>(pthread_join(thread_, nullptr));
-    thread_started_ = false;
-  }
+  thread_.join();
   if (file_ != nullptr) {
     static_cast<void>(std::fclose(file_));
     file_ = nullptr;
   }
   ingress_ = nullptr;
   callbacks_ = SourceCallbacks{};
-}
-
-void* FileSource::ThreadEntry(void* self) noexcept {
-  static_cast<FileSource*>(self)->SourceMain();
-  return nullptr;
 }
 
 void FileSource::NotifyDrop() noexcept {

@@ -12,6 +12,7 @@
 #include "osp/log.hpp"
 #include "osp/socket.hpp"
 #include "osp/spsc_ringbuffer.hpp"
+#include "osp/thread.hpp"
 #include "osp/vocabulary.hpp"
 #include "rs/codec.hpp"
 #include "rs/config.hpp"
@@ -26,7 +27,6 @@
 
 #include <atomic>
 #include <mutex>
-#include <pthread.h>
 
 namespace rs {
 
@@ -38,6 +38,7 @@ struct ServerConfig {
   const char* advertise_ip = "127.0.0.1";
   uint32_t max_clients = kMaxConnections;
   uint64_t id_seed = 0U;  // 0 = fill from the system RNG.
+  osp::ThreadOptions loop_thread{};
   // kUnknown = auto-detect from the file header; kH264/kH265 must match it.
   Codec codec = Codec::kUnknown;
 };
@@ -187,6 +188,7 @@ class RtspServer final : public osp::EventLoop<RtspServer, kMaxPollEvents, 8U> {
   void Stop() noexcept;
   [[nodiscard]] ServerStats Stats() const noexcept;
   [[nodiscard]] ServerSnapshot Snapshot() const noexcept;
+  void CopySnapshot(ServerSnapshot& out) const noexcept;
   [[nodiscard]] bool Running() const noexcept { return running_.load(std::memory_order_acquire); }
   [[nodiscard]] bool StopRequested() const noexcept { return stop_requested_.load(std::memory_order_acquire); }
   // Public producer boundary for an external encoder. Acquire/Commit on this
@@ -297,8 +299,7 @@ class RtspServer final : public osp::EventLoop<RtspServer, kMaxPollEvents, 8U> {
   static void ErrorThunk(void* ctx, uint32_t error) noexcept;
   [[nodiscard]] bool StartThreads() noexcept;
   void JoinThreads() noexcept;
-  static void* LoopThreadEntry(void* self) noexcept;
-  static void* SourceThreadEntry(void* self) noexcept;
+  void LoopThreadMain() noexcept;
 
   uint64_t last_input_seq_ = 0U;
   uint64_t rtcp_closed_sr_ = 0U;
@@ -348,8 +349,7 @@ class RtspServer final : public osp::EventLoop<RtspServer, kMaxPollEvents, 8U> {
   std::atomic<uint32_t> source_dropped_{0U};
   std::atomic<uint32_t> source_error_{0U};
 
-  pthread_t loop_thread_{};
-  bool loop_thread_started_ = false;
+  osp::Thread loop_thread_{};
   std::atomic<bool> running_{false};
   std::atomic<bool> stop_requested_{false};
 
@@ -364,6 +364,7 @@ class RtspServer final : public osp::EventLoop<RtspServer, kMaxPollEvents, 8U> {
   mutable std::mutex snapshot_mutex_;
   ServerStats snapshot_{};
   ServerSnapshot snapshot_full_{};
+  ServerSnapshot snapshot_staging_{};
 };
 
 }  // namespace rs

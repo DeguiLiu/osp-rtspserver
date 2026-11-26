@@ -77,6 +77,7 @@ class RtspParser {
   [[nodiscard]] static bool ParseHead(const char* head, uint32_t head_len, RtspRequest& req) noexcept;
 
   alignas(kCacheLineBytes) uint8_t buf_[kRtspRxBytes] = {};
+  RtspRequest request_{};
   uint32_t len_ = 0U;
   static_assert((kRtspRxBytes % kCacheLineBytes) == 0U, "RTSP rx buffer must be cache-line aligned");
 };

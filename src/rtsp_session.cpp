@@ -370,8 +370,7 @@ void RtspSession::Configure(FrameIngress& ingress, const TrackParams& params, co
   hsm_.Restart();
   transport_ = TransportKind::kNone;
   tx_.Reset();
-  session_id_[0] = '\0';
-  session_id_len_ = 0U;
+  session_id_.clear();
   ssrc_ = 0U;
   next_seq_ = 0U;
   id_epoch_ = 0U;
@@ -383,6 +382,7 @@ void RtspSession::Configure(FrameIngress& ingress, const TrackParams& params, co
   awaiting_rtp_info_ = false;
   rtcp_.Reset();
   last_activity_ns_ = osp::SteadyNowNs();
+  last_peer_activity_ns_ = last_activity_ns_;
   idr_deadline_ns_ = 0U;
   cseq_ = 0U;
   last_status_ = 0U;
@@ -438,11 +438,15 @@ bool RtspSession::ReadRtcp(uint64_t now_ns) noexcept {
     if (got.value() == 0U) {
       return true;
     }
-    last_activity_ns_ = now_ns;
+    const uint32_t bad_before = counters_.rtcp_bad;
     if (rtcp_.OnDatagram(osp::byte_span(reinterpret_cast<const std::byte*>(buf), got.value()), counters_.rtcp_rr,
                          counters_.rtcp_bye, counters_.rtcp_bad)) {
       Close(kCloseTeardown, now_ns);
       return false;
+    }
+    if (bad_before == counters_.rtcp_bad) {
+      last_activity_ns_ = now_ns;
+      last_peer_activity_ns_ = now_ns;
     }
   }
   return true;
@@ -486,9 +490,9 @@ SessionSnapshot RtspSession::Snapshot(uint64_t now_ns) const noexcept {
   out.counters = counters_;
   out.close_reason = close_reason_;
   out.last_activity_ns = last_activity_ns_;
-  const uint32_t prefix = (session_id_len_ < 8U) ? session_id_len_ : 8U;
+  const uint32_t prefix = (session_id_.size() < 8U) ? session_id_.size() : 8U;
   if (prefix != 0U) {
-    std::memcpy(out.session_id_prefix, session_id_, prefix);
+    std::memcpy(out.session_id_prefix, session_id_.c_str(), prefix);
   }
   out.session_id_prefix[prefix] = '\0';
   return out;
@@ -537,18 +541,6 @@ void RtspSession::OutU32(OutBuf& out, uint32_t v) noexcept {
   }
 }
 
-void RtspSession::OutSpan(OutBuf& out, osp::byte_span s) noexcept {
-  if (!out.ok) {
-    return;
-  }
-  if ((out.cap - out.len) < s.size()) {
-    out.ok = false;
-    return;
-  }
-  std::memcpy(out.dst + out.len, s.data(), s.size());
-  out.len += static_cast<uint32_t>(s.size());
-}
-
 void RtspSession::BeginResponse(OutBuf& out, uint16_t status, uint32_t cseq) noexcept {
   OutStr(out, "RTSP/1.0 ");
   OutU32(out, status);
@@ -568,7 +560,7 @@ bool RtspSession::FinishResponse(OutBuf& out) noexcept {
   }
   tx_.MarkProgressIfEmpty(last_activity_ns_);
   const bool committed = tx_.Commit(out.len);
-  return committed && tx_.Unflushed() <= kControlTxLimit;
+  return committed;
 }
 
 bool RtspSession::OpenResponse(OutBuf& out, uint16_t status, uint32_t cseq, uint32_t reserve) noexcept {
@@ -623,23 +615,24 @@ bool RtspSession::SessionMatches(const RtspRequest& req, bool& header_present) c
   osp::byte_span v;
   header_present = FindHeader(req, "Session", v);
   if (!header_present) {
-    return session_id_len_ == 0U;
+    return session_id_.empty();
   }
   uint32_t n = 0U;
   while (n < v.size() && v.data()[n] != static_cast<std::byte>(';')) {
     ++n;
   }
-  if (n == 0U || n != session_id_len_) {
+  if (n == 0U || n != session_id_.size()) {
     return false;
   }
-  return std::memcmp(v.data(), session_id_, n) == 0;
+  return std::memcmp(v.data(), session_id_.c_str(), n) == 0;
 }
 
 void RtspSession::NewSessionIdentity(uint64_t now) noexcept {
   ++id_epoch_;
   const uint64_t mixed = SplitMix64(cfg_.id_seed ^ (static_cast<uint64_t>(id_epoch_) << 32U) ^ now);
-  Hex16(session_id_, mixed);
-  session_id_len_ = 16U;
+  char session_id[17U] = {};
+  Hex16(session_id, mixed);
+  session_id_ = osp::FixedString<16U>{osp::TruncateToCapacity_t{}, session_id, 16U};
   ssrc_ = static_cast<uint32_t>(SplitMix64(mixed ^ 0x5DEECE66DULL)) | 1U;
   next_seq_ = static_cast<uint16_t>(SplitMix64(mixed ^ 0xA5A5A5A5ULL) & 0xFFFFU);
 }
@@ -669,16 +662,15 @@ bool RtspSession::ParseTransport(const RtspRequest& req) noexcept {
 
   bool have_interleaved = false;
   bool have_client_port = false;
-  bool unicast = false;
   uint32_t rtp_ch = 0U;
   uint32_t rtcp_ch = 1U;
   uint32_t crtp = 0U;
   uint32_t crtcp = 0U;
   while (NextToken(p, end, tok, tok_len)) {
-    if (StartsWithLitCI(tok, tok_len, "unicast")) {
-      unicast = true;
-    } else if (StartsWithLitCI(tok, tok_len, "multicast") || StartsWithLitCI(tok, tok_len, "ttl=") ||
-               StartsWithLitCI(tok, tok_len, "destination=")) {
+    // RFC 2326: an absent unicast/multicast parameter means unicast, so a
+    // client that omits the token is accepted. Only multicast is rejected.
+    if (StartsWithLitCI(tok, tok_len, "multicast") || StartsWithLitCI(tok, tok_len, "ttl=") ||
+        StartsWithLitCI(tok, tok_len, "destination=")) {
       return false;
     } else if (StartsWithLitCI(tok, tok_len, "client_port=")) {
       const uint32_t off = static_cast<uint32_t>(sizeof("client_port=") - 1U);
@@ -700,9 +692,6 @@ bool RtspSession::ParseTransport(const RtspRequest& req) noexcept {
         return false;
       }
     }
-  }
-  if (!unicast) {
-    return false;
   }
   if (kind == TransportKind::kTcp) {
     if (!have_interleaved) {
@@ -738,6 +727,7 @@ uint16_t RtspSession::HandleRequest(const RtspRequest& req, uint64_t now_ns) noe
     last_status_ = WriteStatus(StatusCode(RtspStatus::kBadRequest), 0U);
     return last_status_;
   }
+  last_peer_activity_ns_ = now_ns;
   cseq_ = cseq;
   uint16_t status = 0U;
   switch (req.method) {
@@ -797,7 +787,6 @@ uint16_t RtspSession::HandleDescribe(const RtspRequest& req, uint32_t cseq, uint
   if (params_ == nullptr || codec_ == Codec::kUnknown) {
     return WriteStatus(StatusCode(RtspStatus::kInternalError), cseq);
   }
-  char body[kMaxSdpBody];
   SdpParams sp{};
   sp.codec = codec_;
   sp.server_ip = cfg_.advertise_ip;
@@ -812,15 +801,15 @@ uint16_t RtspSession::HandleDescribe(const RtspRequest& req, uint32_t cseq, uint
   sp.pps_len = params_->pps_len;
   sp.clock_rate = kClockRate;
   sp.payload_type = kRtpPayloadType;
-  auto sdp = BuildSdp(sp, osp::writable_byte_span(reinterpret_cast<std::byte*>(body), sizeof(body)));
-  if (!sdp.has_value() || sdp.value() == 0U || sdp.value() > sizeof(body)) {
-    return WriteStatus(StatusCode(RtspStatus::kInternalError), cseq);
-  }
-
   OutBuf out;
-  if (!OpenResponse(out, StatusCode(RtspStatus::kOk), cseq, sdp.value() + 320U)) {
+  if (!OpenResponse(out, StatusCode(RtspStatus::kOk), cseq, kMaxSdpBody + 320U)) {
     Close(kCloseControlOverflow, last_activity_ns_);
     return 0U;
+  }
+  char* const body = out.dst + out.cap - kMaxSdpBody;
+  auto sdp = BuildSdp(sp, osp::writable_byte_span(reinterpret_cast<std::byte*>(body), kMaxSdpBody));
+  if (!sdp.has_value() || sdp.value() == 0U || sdp.value() > kMaxSdpBody) {
+    return WriteStatus(StatusCode(RtspStatus::kInternalError), cseq);
   }
   OutStr(out, "Content-Base: rtsp://");
   OutStr(out, cfg_.advertise_ip);
@@ -831,7 +820,12 @@ uint16_t RtspSession::HandleDescribe(const RtspRequest& req, uint32_t cseq, uint
   OutStr(out, "Content-Length: ");
   OutU32(out, sdp.value());
   OutStr(out, "\r\n\r\n");
-  OutSpan(out, osp::byte_span(reinterpret_cast<const std::byte*>(body), sdp.value()));
+  if (out.ok && out.len <= (out.cap - kMaxSdpBody) && sdp.value() <= (out.cap - out.len)) {
+    std::memmove(out.dst + out.len, body, sdp.value());
+    out.len += sdp.value();
+  } else {
+    out.ok = false;
+  }
   return CloseResponse(out, StatusCode(RtspStatus::kOk));
 }
 
@@ -898,7 +892,7 @@ uint16_t RtspSession::HandleSetup(const RtspRequest& req, uint32_t cseq, uint64_
     return 0U;
   }
   OutStr(out, "Session: ");
-  OutStr(out, session_id_);
+  OutStr(out, session_id_.c_str());
   OutStr(out, ";timeout=");
   OutU32(out, kSessionTimeoutMs / kMsPerSec);
   OutStr(out, "\r\nTransport: ");
@@ -982,7 +976,7 @@ uint16_t RtspSession::HandleTeardown(const RtspRequest& req, uint32_t cseq, uint
     return 0U;
   }
   OutStr(out, "Session: ");
-  OutStr(out, session_id_);
+  OutStr(out, session_id_.c_str());
   OutStr(out, "\r\n\r\n");
   const uint16_t status = CloseResponse(out, StatusCode(RtspStatus::kOk));
   if (status == 0U) {
@@ -994,8 +988,7 @@ uint16_t RtspSession::HandleTeardown(const RtspRequest& req, uint32_t cseq, uint
   transport_ = TransportKind::kNone;
   static_cast<void>(hsm_.Dispatch(sess::kTeardown));
   static_cast<void>(hsm_.Dispatch(sess::kCloseDone));
-  session_id_[0] = '\0';
-  session_id_len_ = 0U;
+  session_id_.clear();
   return StatusCode(RtspStatus::kOk);
 }
 
@@ -1039,10 +1032,13 @@ bool RtspSession::OnInterleaved(uint8_t channel, osp::byte_span payload, uint64_
     ++counters_.interleaved_errors;
     return false;
   }
-  last_activity_ns_ = now_ns;
+  const uint32_t bad_before = counters_.rtcp_bad;
   if (rtcp_.OnDatagram(payload, counters_.rtcp_rr, counters_.rtcp_bye, counters_.rtcp_bad)) {
     // The peer ended the session; stop media instead of waiting for timeout.
-    Close(kCloseTeardown, last_activity_ns_);
+    Close(kCloseTeardown, now_ns);
+  } else if (bad_before == counters_.rtcp_bad) {
+    last_activity_ns_ = now_ns;
+    last_peer_activity_ns_ = now_ns;
   }
   return true;
 }
@@ -1109,7 +1105,7 @@ bool RtspSession::WritePlayResponse(uint64_t now) noexcept {
     return false;  // Retry after the server drains the buffer.
   }
   OutStr(out, "Session: ");
-  OutStr(out, session_id_);
+  OutStr(out, session_id_.c_str());
   OutStr(out, "\r\nRange: npt=0-\r\nRTP-Info: url=rtsp://");
   OutStr(out, cfg_.advertise_ip);
   OutCh(out, ':');
@@ -1156,6 +1152,11 @@ bool RtspSession::PumpMedia(uint64_t now) noexcept {
       DropToAwaitIdr(now);
       return false;
     }
+    if (tcp && ((tx_.Unflushed() > (kMediaTxLimitBytes - kMaxInterleavedBytes)) ||
+                (false == tx_.Reserve(kMaxInterleavedBytes)))) {
+      return false;
+    }
+    const CodecCursor saved_cursor = media_.CursorState();
     auto pkt = media_.NextPacket(ssrc_);
     if (!pkt.has_value()) {
       const PacketizeError err = pkt.get_error();
@@ -1167,12 +1168,10 @@ bool RtspSession::PumpMedia(uint64_t now) noexcept {
       DropToAwaitIdr(now);
       return false;
     }
-    if (tcp && !tx_.Reserve(kMaxInterleavedBytes)) {
-      return false;  // Wait for the server to drain the buffer.
-    }
     const RtpPacket view = pkt.value();
     const uint32_t wire_bytes = view.header_len + view.prefix_len + view.payload_len;
     if (!media_.Admit(wire_bytes, now)) {
+      media_.RestoreCursor(saved_cursor);
       // Shaping pauses the cursor and never discards the access unit: dropping
       // here forced AwaitIDR whenever an IDR exceeded the 32 KiB burst, which
       // throttled UDP to roughly one AU per second at 4 Mbit/s.
@@ -1210,7 +1209,7 @@ bool RtspSession::PumpMedia(uint64_t now) noexcept {
     }
     next_seq_ = media_.CursorSeq();
     ++counters_.packets_sent;
-    rtcp_.OnRtpSent(view.payload_len, now);
+    rtcp_.OnRtpSent(view.prefix_len + view.payload_len, now, CursorTs());
     sent_bytes += wire_bytes;
     // Packet trace: opt-in per session ("trace <slot> on") and rate-limited to
     // 10 lines/s, so the loop thread never becomes a logging hot path.
@@ -1220,7 +1219,7 @@ bool RtspSession::PumpMedia(uint64_t now) noexcept {
     if (trace_enabled_ && (trace_last_ns_ == 0U || (now - trace_last_ns_) >= 100000000ULL)) {
       osp::log::LogWrite(osp::log::Level::kDebug, "rtsp", __FILE__, __LINE__,
                          "trace sess=%.8s seq=%" PRIu32 " ts=%" PRIu32 " len=%" PRIu32 " marker=%d transport=%s",
-                         session_id_, static_cast<uint32_t>(CursorSeq()), static_cast<uint32_t>(CursorTs()),
+                         session_id_.c_str(), static_cast<uint32_t>(CursorSeq()), static_cast<uint32_t>(CursorTs()),
                          static_cast<uint32_t>(view.header_len + view.prefix_len + view.payload_len),
                          view.marker ? 1 : 0, (transport_ == TransportKind::kTcp) ? "tcp" : "udp");
       trace_last_ns_ = now;
@@ -1235,7 +1234,7 @@ bool RtspSession::OnTick(uint64_t now_ns) noexcept {
     return false;
   }
   if ((hsm_.IsInState(sess::kReady) || hsm_.IsInState(sess::kPlaying)) &&
-      (now_ns - last_activity_ns_) > kSessionTimeoutNs) {
+      (now_ns - last_peer_activity_ns_) > kSessionTimeoutNs) {
     Close(kCloseSessionTimeout, now_ns);
     return false;
   }
@@ -1245,7 +1244,7 @@ bool RtspSession::OnTick(uint64_t now_ns) noexcept {
     RequestIdr(now_ns);
   }
   if (hsm_.IsInState(sess::kPlaying)) {
-    rtcp_.MaybeSend(now_ns, ssrc_, cfg_.advertise_ip, CursorTs(), counters_.packets_sent, transport_, rtcp_channel_,
+    rtcp_.MaybeSend(now_ns, ssrc_, cfg_.advertise_ip, counters_.packets_sent, transport_, rtcp_channel_,
                     tx_, udp_, counters_.rtcp_sr, counters_.rtcp_bad);
   }
   if (awaiting_rtp_info_ && now_ns > idr_deadline_ns_) {

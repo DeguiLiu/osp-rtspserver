@@ -4,6 +4,7 @@
 #ifndef RS_FILE_SOURCE_HPP_
 #define RS_FILE_SOURCE_HPP_
 
+#include "osp/thread.hpp"
 #include "osp/vocabulary.hpp"
 #include "rs/codec.hpp"
 #include "rs/config.hpp"
@@ -13,7 +14,6 @@
 #include <cstdio>
 
 #include <atomic>
-#include <pthread.h>
 
 namespace rs {
 
@@ -42,11 +42,11 @@ class FileSource final {
   [[nodiscard]] osp::expected<FileSourceInfo, FileSourceError> Open(const char* path, Codec expected) noexcept;
 
   // Starts the paced producer. `callbacks` must stay valid until Stop().
-  [[nodiscard]] osp::expected<void, FileSourceError> Start(FrameIngress& ingress, SourceCallbacks callbacks) noexcept;
+  [[nodiscard]] osp::expected<void, FileSourceError> Start(
+      FrameIngress& ingress, SourceCallbacks callbacks, const osp::ThreadOptions& options = osp::ThreadOptions{}) noexcept;
   void Stop() noexcept;
 
  private:
-  static void* ThreadEntry(void* self) noexcept;
   void SourceMain() noexcept;
   [[nodiscard]] bool LoadParamSets() noexcept;
   void FillSourceBuffer() noexcept;
@@ -65,8 +65,7 @@ class FileSource final {
   FrameIngress* ingress_ = nullptr;
   SourceCallbacks callbacks_{};
   std::atomic<bool> stop_{false};
-  pthread_t thread_{};
-  bool thread_started_ = false;
+  osp::Thread thread_{};
 
   alignas(kCacheLineBytes) uint8_t au_buf_[kMaxAuBytes + 8192U] = {};
   uint32_t au_off_ = 0U;
